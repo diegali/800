@@ -125,50 +125,37 @@ tr:hover td { background: var(--surface2); }
 .prog-fill-danger { background: #C94040; }
 
 /* Modals */
+/* 1. El fondo oscuro (Overlay) */
 .modal-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.35);
-  z-index: 100;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    display: none; /* Oculto por defecto */
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
 }
-.modal-overlay.open { display: flex; }
-.modal {
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 560px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+
+/* 2. Clase para mostrar el overlay */
+.modal-overlay.open {
+    display: flex !important;
 }
-.modal-head {
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.modal-title { font-size: 14px; font-weight: 600; }
-.modal-body { padding: 18px 20px; }
-.modal-foot {
-  padding: 14px 20px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.modal-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text2);
-  font-size: 18px;
-  line-height: 1;
-  padding: 2px;
+
+/* 3. El cuadro blanco (Modal) */
+.modal-overlay .modal {
+    position: relative !important; /* IMPORTANTE: No usar fixed aquí */
+    background: white !important;
+    width: 90% !important;
+    max-width: 500px !important;
+    height: auto !important; /* Para que no ocupe toda la pantalla */
+    display: flex !important; /* Siempre flex si el padre está open */
+    flex-direction: column;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    overflow: hidden;
 }
 
 /* Screens */
@@ -223,7 +210,12 @@ tr:hover td { background: var(--surface2); }
 .empty-sub { font-size: 12px; }
 
 /* Mono numbers */
-.num { font-family: var(--mono); }
+/* Esto alineará el texto a la derecha en cualquier celda con la clase 'num' */
+.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums; /* Esto hace que los números midan lo mismo y se vean ordenados */
+    padding-right: 15px; /* Un poco de aire al final */
+}
 
 .text-ok { color: var(--ok); }
 .text-warn { color: var(--warn); }
@@ -238,4 +230,126 @@ tr:hover td { background: var(--surface2); }
   text-transform: uppercase;
   letter-spacing: .06em;
   margin-bottom: 10px;
+}
+
+/* --- Modal Estilos --- */
+.modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5); display: none; 
+    justify-content: center; align-items: center; z-index: 9999;
+}
+.modal-overlay.open { display: flex !important; }
+
+.modal {
+    background: white; width: 500px; border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2); overflow: hidden;
+    display: flex; flex-direction: column;
+}
+
+.modal-head { 
+    padding: 16px; border-bottom: 1px solid #eee; 
+    display: flex; justify-content: space-between; align-items: center;
+    font-weight: 600; background: #f8f9fa;
+}
+
+.modal-body { padding: 16px; }
+
+.modal-body table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+.modal-body th, .modal-body td { 
+    padding: 8px; border-bottom: 1px solid #eee; text-align: left; font-size: 13px; 
+}
+
+.modal-foot { padding: 12px 16px; border-top: 1px solid #eee; text-align: right; }
+
+#iop-matrix td:first-child,
+#iop-matrix th:first-child {
+  position: sticky;
+  left: 0;
+  background: white;
+  z-index: 1;
+}
+
+/* TABLA */
+#iop-matrix {
+  border-collapse: collapse;
+}
+
+/* CELDAS */
+#iop-matrix th,
+#iop-matrix td {
+  border: 1px solid #eee;
+  padding: 4px 6px;
+  white-space: nowrap;
+}
+
+/* HEADER GENERAL */
+#iop-matrix th {
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+  z-index: 3;
+}
+
+/* HEADER fijo */
+.sticky-header {
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+  z-index: 3;
+}
+
+/* COLUMNA N° */
+.sticky-col-nro {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 2;
+  text-align: center;
+  width: 40px;
+}
+
+/* COLUMNA FACTOR */
+.sticky-col-factor {
+  position: sticky;
+  left: 40px;
+  background: #fff;
+  z-index: 2;
+  min-width: 200px;
+}
+
+/* 🔥 CLAVE: HEADER + COLUMNAS */
+#iop-matrix th.sticky-col-nro {
+  z-index: 5;
+}
+
+#iop-matrix th.sticky-col-factor {
+  z-index: 5;
+}
+
+/* números */
+#iop-matrix td {
+  text-align: right;
+  font-size: 11px;
+}
+
+/* hover */
+#iop-matrix tr:hover {
+  background: #f5f7fa;
+}
+
+.grid-iop {
+  display: grid;
+  grid-template-columns: 2fr 1fr; /* 🔥 clave */
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .grid-iop {
+    grid-template-columns: 1fr;
+  }
+}
+
+.grid-iop > div:last-child {
+  max-width: 350px;
 }

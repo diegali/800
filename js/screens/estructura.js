@@ -1,10 +1,14 @@
-const PLANTILLA_NOMBRE = 'plantilla_items.xlsx';
+function descargarPlantillaPresupuesto() {
+    const a = document.createElement('a');
+    a.href = 'plantilla_presupuesto.xlsx';
+    a.download = 'plantilla_presupuesto.xlsx';
+    a.click();
+}
 
-function descargarPlantilla() {
-    // Genera la URL del archivo que vas a servir desde la carpeta raíz del proyecto
+function descargarPlantillaEstructura() {
     const a = document.createElement('a');
     a.href = 'plantilla_items.xlsx';
-    a.download = PLANTILLA_NOMBRE;
+    a.download = 'plantilla_estructura.xlsx';
     a.click();
 }
 
@@ -16,37 +20,109 @@ let factoresTemp = [];
 function renderItems() {
     const tbody = document.getElementById('items-tbody');
     const empty = document.getElementById('items-empty');
+
+    // Si no hay ítems
     if (!state.items.length) {
         tbody.innerHTML = '';
         empty.style.display = 'block';
+        // Ponemos el total en 0
+        const totalOfertaEl = document.getElementById('total-oferta-items');
+        if (totalOfertaEl) totalOfertaEl.textContent = fmt$(0);
         return;
     }
+
     empty.style.display = 'none';
+
+    let acumuladoTotal = 0; // Variable para sumar todo
+    const totalOferta = state.items.reduce((acc, item) => {
+        return acc + (item.cantidad * item.precio);
+    }, 0);
+
     tbody.innerHTML = state.items.map(item => {
-        const total = item.cantidad * item.precio;
+        const total = (item.cantidad || 0) * (item.precio || 0);
+        acumuladoTotal += total; // Sumamos al acumulador
+        const montoItem = item.cantidad * item.precio;
+        const incidencia = totalOferta > 0 ? (montoItem / totalOferta) * 100 : 0;
+        const tieneFactores = item.factores && item.factores.length > 0;
         const factCount = item.factores ? item.factores.length : 0;
         const factSum = item.factores ? item.factores.reduce((s, f) => s + f.peso, 0) : 0;
         const factOk = factSum === 100;
+
         return `<tr>
-      <td style="font-weight:500">${item.nombre}</td>
-      <td class="num">${item.unidad}</td>
-      <td class="num">${item.cantidad}</td>
-      <td class="num">${fmt$(item.precio)}</td>
-      <td class="num fw6">${fmt$(total)}</td>
-      <td>
-        <button class="btn btn-sm" onclick="verEstructura(${item.id})">
-          ${factCount} factor${factCount !== 1 ? 'es' : ''} ${factOk ? '<span class="tag tag-ok" style="font-size:10px;padding:1px 5px">100%</span>' : '<span class="tag tag-warn" style="font-size:10px;padding:1px 5px">' + (factSum) + '%</span>'}
-        </button>
-      </td>
-      <td><button class="btn btn-sm btn-danger" onclick="eliminarItem(${item.id})">Eliminar</button></td>
-    </tr>`;
+            <td style="font-weight:500">${item.nombre}</td>
+            <td class="num">${item.unidad}</td>
+            <td class="num">${item.cantidad}</td>
+            <td class="num">${fmt$(item.precio)}</td> 
+            <td class="num fw6">${fmt$(total)}</td>
+            <td>
+                <span style="
+                    font-size: 12px;
+                    color: ${tieneFactores ? 'green' : '#999'};
+                    font-weight: ${tieneFactores ? 'bold' : 'normal'};
+                ">
+                    ${tieneFactores ? '✔ Cargado' : 'Sin cargar'}
+                </span>
+            </td>
+            <td style="text-align: right;">
+                <button class="btn btn-sm" onclick="verEstructura(${item.id})">
+                    ${factCount} factor${factCount !== 1 ? 'es' : ''} 
+                    ${factOk ? '<span class="tag tag-ok" style="font-size:10px;padding:1px 5px">100%</span>' : '<span class="tag tag-warn" style="font-size:10px;padding:1px 5px">' + (factSum) + '%</span>'}
+                </button>
+            </td>
+            <td style="text-align: right;">
+                ${incidencia.toFixed(2)}%
+            </td>
+            <td><button class="btn btn-sm btn-danger" onclick="eliminarItem(${item.id})">Eliminar</button></td>
+        </tr>`;
     }).join('');
+
+    // ACTUALIZACIÓN DEL TOTAL EN PANTALLA
+    const totalOfertaEl = document.getElementById('total-oferta-items');
+    if (totalOfertaEl) {
+        totalOfertaEl.textContent = fmt$(acumuladoTotal);
+    }
+
+    actualizarCardEstructura();
 }
 
 function agregarFactor() {
     factoresTemp.push({ nombre: '', peso: 0 });
     renderFactoresForm();
 }
+
+function renderFactores() {
+    const item = state.items.find(i => i.id === itemIdEdicionActual);
+    const tbody = document.getElementById('ver-estructura-tbody');
+    const guardados = item.factores || [];
+
+    // Inyectamos todas las filas de golpe
+    tbody.innerHTML = window.LISTA_FACTORES.map((nombre, index) => {
+        const existente = guardados.find(f => f.nombre === nombre);
+        const valor = existente ? existente.peso : '';
+        const tieneValor = valor && parseFloat(valor) > 0;
+
+        return `
+            <tr style="background-color: ${tieneValor ? '#e8f5e9' : 'transparent'};">
+                <td style="font-size: 12px; padding: 4px;">
+                    ${(index + 1).toString().padStart(2, '0')} - ${nombre}
+                </td>
+                <td style="text-align: center;">
+                    <input type="number" class="input-peso" 
+                        data-nombre="${nombre}" 
+                        value="${valor}" 
+                        placeholder="0" 
+                        style="width: 60px; text-align: center;"
+                        oninput="onInputFactor(this)">
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    setTimeout(() => {
+        validarSumaTotal();
+    }, 0);
+}
+
 function renderFactoresForm() {
     const el = document.getElementById('factores-lista');
     el.innerHTML = factoresTemp.map((f, i) => `
@@ -67,7 +143,7 @@ function renderFactoresForm() {
 function actualizarTotalFactores() {
     const total = factoresTemp.reduce((s, f) => s + f.peso, 0);
     const el = document.getElementById('factores-total');
-    el.textContent = total.toFixed(1) + '%';
+    el.textContent = total.toFixed(2) + '%';
     el.className = 'num fw6';
     if (total === 100) el.style.color = 'var(--ok)';
     else if (total > 100) el.style.color = 'var(--danger)';
@@ -101,23 +177,41 @@ function eliminarItem(id) {
     state.real = state.real.filter(r => r.itemId !== id);
     save(); renderItems(); populateItemSelects();
 }
-function verEstructura(id) {
-    const item = state.items.find(i => i.id === id);
-    document.getElementById('ver-estructura-titulo').textContent = 'Estructura — ' + item.nombre;
-    const tbody = document.getElementById('ver-estructura-tbody');
-    if (!item.factores || !item.factores.length) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text3)">Sin factores definidos</td></tr>';
-    } else {
-        // En verEstructura(), reemplazá la línea del tbody:
-        tbody.innerHTML = item.factores.map(f =>
-            `<tr>
-    <td>${f.nro ? f.nro + ' — ' : ''}${f.nombre}</td>
-    <td class="num">${f.peso}%</td>
-    <td>IOP Córdoba</td>
-  </tr>`
-        ).join('');
+
+async function agregarFactorAlItem() {
+    const nombreSelect = document.getElementById('nuevo-factor-nombre');
+    const pesoInput = document.getElementById('nuevo-factor-peso');
+
+    const nombre = nombreSelect.value; // Ya no es .value.trim() porque viene de un combo
+    const peso = parseFloat(pesoInput.value);
+
+    // DEBUG: Si esto no sale en consola, el onclick no está llegando
+    console.log("Intentando guardar:", { nombre, peso });
+
+    if (!nombre || isNaN(peso)) {
+        alert("Seleccione un factor y complete el %");
+        return;
     }
-    openModal('modal-ver-estructura');
+
+    const item = state.items.find(i => i.id === itemIdEdicionActual);
+    if (!item) {
+        console.error("No se encontró el ítem con ID:", itemIdEdicionActual);
+        return;
+    }
+
+    if (!item.factores) item.factores = [];
+
+    item.factores.push({ nombre, peso });
+
+    // Limpieza
+    nombreSelect.value = '';
+    pesoInput.value = '';
+
+    // ¡IMPORTANTE! Asegúrate de tener estas dos funciones definidas
+    renderFactores();
+    await save();
+
+    console.log("Factor guardado exitosamente");
 }
 
 function importarItemsExcel(input) {
@@ -276,4 +370,129 @@ function importarItemsExcel(input) {
         input.value = '';
     };
     reader.readAsArrayBuffer(file);
+}
+
+// ═══════════════════════════════════════════════
+// IMPORTAR PRESUPUESTO (plantilla oferta)
+// ═══════════════════════════════════════════════
+function limpiarNumeroExcel(valor) {
+    if (typeof valor === 'number') return valor;
+    if (!valor) return 0;
+
+    // Convertimos a string y quitamos símbolos de moneda y puntos de miles
+    let limpio = valor.toString()
+        .replace(/\$/g, '')       // Quita el signo $
+        .replace(/\s/g, '')       // Quita espacios
+        .replace(/\./g, '')       // Quita el punto de miles (ej: 1.000 -> 1000)
+        .replace(',', '.');       // Cambia la coma decimal por punto (ej: 10,50 -> 10.50)
+
+    return parseFloat(limpio) || 0;
+}
+
+function importarPresupuesto(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const wb = XLSX.read(data, { type: 'array' });
+
+            // Buscar hoja "Presupuesto" o primera hoja
+            const wsName = wb.SheetNames.find(n =>
+                n.trim().toLowerCase() === 'presupuesto'
+            ) || wb.SheetNames[0];
+            const ws = wb.Sheets[wsName];
+            const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+            // Encontrar la fila de encabezado buscando "Designación" o "Designacion"
+            let headerIdx = -1;
+            let colDesig = -1, colUnidad = -1, colCantidad = -1, colPrecio = -1;
+
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                for (let j = 0; j < row.length; j++) {
+                    const val = row[j] ? String(row[j]).trim().toLowerCase()
+                        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') : '';
+                    if (val === 'designacion') {
+                        headerIdx = i;
+                        colDesig = j;
+                    }
+                    if (val === 'unidad') colUnidad = j;
+                    if (val === 'cantidad') colCantidad = j;
+                    // Buscamos cualquier variante de Precio Unitario
+                    const variantesPrecio = ['precio unitario', 'precio unit.', 'precio', 'p.u.', 'p.unitario', 'monto unitario', 'unitario'];
+                    if (variantesPrecio.some(v => val.includes(v))) {
+                        colPrecio = j;
+                    }
+                }
+                if (headerIdx === i) break;
+            }
+
+            if (headerIdx === -1 || colDesig === -1) {
+                return alert('No se encontró la columna "Designación" en el archivo. Verificá que uses la plantilla correcta.');
+            }
+
+            const nuevos = [];
+            for (let i = headerIdx + 1; i < rows.length; i++) {
+                const row = rows[i];
+                const nombre = row[colDesig] ? String(row[colDesig]).trim() : '';
+                if (!nombre) continue;
+                const unidad = colUnidad >= 0 && row[colUnidad] ? String(row[colUnidad]).trim() : 'gl';
+                const cantidad = colCantidad >= 0 ? parseFloat(row[colCantidad]) || 0 : 0;
+                const precio = colPrecio >= 0 ? limpiarNumeroExcel(row[colPrecio]) : 0;
+                nuevos.push({
+                    id: state.nextId++,
+                    nombre,
+                    unidad,
+                    cantidad: Math.round(cantidad * 10000) / 10000,
+                    precio,
+                    factores: []
+                });
+            }
+
+            if (!nuevos.length) return alert('No se encontraron ítems válidos. Verificá que la plantilla tenga datos debajo del encabezado.');
+
+            if (state.items.length > 0) {
+                if (!confirm(`Se reemplazarán los ${state.items.length} ítems actuales por los ${nuevos.length} del Excel. ¿Continuás?`)) return;
+            }
+
+            const idsViejos = state.items.map(i => i.id);
+            state.versiones = state.versiones.filter(v => !idsViejos.includes(v.itemId));
+            state.plan = state.plan.filter(p => !idsViejos.includes(p.itemId));
+            state.real = state.real.filter(r => !idsViejos.includes(r.itemId));
+
+            state.items = nuevos;
+            save();
+            populateItemSelects();
+            renderItems();
+            actualizarCardEstructura();
+
+            alert(`✓ ${nuevos.length} ítem${nuevos.length !== 1 ? 's' : ''} importado${nuevos.length !== 1 ? 's' : ''} correctamente.\nAhora podés cargar la estructura de costos para cada ítem.`);
+        } catch (err) {
+            alert('Error al leer el archivo: ' + err.message);
+        }
+        input.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// ═══════════════════════════════════════════════
+// MOSTRAR / OCULTAR CARD DE ESTRUCTURA
+// ═══════════════════════════════════════════════
+function actualizarCardEstructura() {
+    const card = document.getElementById('card-estructura-costos');
+    if (!card) return;
+    if (state.items.length > 0) {
+        card.style.display = '';
+        // Mostrar resumen de factores
+        const conFactores = state.items.filter(i => i.factores && i.factores.length > 0).length;
+        const total = state.items.length;
+        const el = document.getElementById('estructura-resumen');
+        if (el) {
+            el.innerHTML = `<span style="color:var(--text-2);font-size:13px">${conFactores} de ${total} ítems con estructura cargada</span>`;
+        }
+    } else {
+        card.style.display = 'none';
+    }
 }

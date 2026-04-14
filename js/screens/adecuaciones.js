@@ -77,7 +77,7 @@ function mostrarDetalle(idx) {
 function calcularAdecuacion() {
     // Populate periodo select with IOP periods not yet in adecuaciones
     const usados = state.adecuaciones.map(a => a.periodo);
-    const disponibles = state.iop.map(i => i.periodo).filter(p => !usados.includes(p)).sort();
+    const disponibles = Object.keys(state.iop || {}).filter(p => !usados.includes(p)).sort();
     const sel = document.getElementById('adec-periodo-select');
     sel.innerHTML = disponibles.map(p => `<option value="${p}">${periodoLabel(p)}</option>`).join('');
     if (!disponibles.length) return alert('No hay períodos IOP disponibles para calcular');

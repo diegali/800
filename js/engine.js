@@ -1,8 +1,14 @@
 // ═══════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════
-function fmt$(n) {
-    return '$' + Math.round(n).toLocaleString('es-AR');
+function fmt$(valor) {
+    if (valor === undefined || valor === null || isNaN(valor)) return '$ 0,00';
+    return Number(valor).toLocaleString('es-AR', {
+        style: 'currency',
+        currency: 'ARS',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
 }
 function fmtPct(n) {
     return (n * 100).toFixed(2) + '%';

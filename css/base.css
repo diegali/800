@@ -108,3 +108,24 @@ body {
   flex-direction: column;
   min-height: 100vh;
 }
+
+/* Ocultar la app hasta que Firebase confirme el usuario */
+body.app-cargando #pantalla-app { display: none !important; }
+body.app-cargando #pantalla-login { display: flex !important; }
+
+/* Chrome, Safari, Edge */
+.input-peso::-webkit-outer-spin-button,
+.input-peso::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+.input-peso {
+  -moz-appearance: textfield;
+}
+
+.screen {
+  overflow-x: hidden;
+}
+
