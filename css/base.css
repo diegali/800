@@ -1,0 +1,110 @@
+:root {
+  --bg: #F5F3EE;
+  --surface: #FFFFFF;
+  --surface2: #F0EDE6;
+  --border: #D8D3C8;
+  --border2: #C4BFB2;
+  --text: #1A1814;
+  --text2: #6B6560;
+  --text3: #9E9990;
+  --accent: #1A3A2A;
+  --accent-light: #E8F0EB;
+  --accent-mid: #2D6B47;
+  --warn: #7A4B10;
+  --warn-bg: #FDF0DC;
+  --danger: #8B1F1F;
+  --danger-bg: #FDEAEA;
+  --ok: #1A5C2E;
+  --ok-bg: #E6F4EB;
+  --info: #1A3A6B;
+  --info-bg: #E6EEFA;
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'IBM Plex Sans', sans-serif;
+  --radius: 6px;
+  --radius-lg: 10px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── Layout ── */
+.app-shell { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: 220px;
+  min-width: 220px;
+  background: var(--accent);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 10;
+}
+
+.sidebar-logo {
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.sidebar-logo .title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: .02em;
+}
+.sidebar-logo .sub {
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+  margin-top: 2px;
+  font-family: var(--mono);
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 0;
+  overflow-y: auto;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 18px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  transition: all .15s;
+  border-left: 2px solid transparent;
+}
+.nav-item:hover { color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.06); }
+.nav-item.active { color: #fff; background: rgba(255,255,255,0.1); border-left-color: #7EC8A0; font-weight: 500; }
+.nav-item .icon { font-size: 14px; width: 18px; text-align: center; }
+
+.nav-section {
+  padding: 12px 18px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.main {
+  margin-left: 220px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}

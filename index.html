@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redeterminaciones 800/16 — Córdoba</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/screens.css">
+</head>
+
+<body>
+
+    <div class="app-shell">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <div class="title">Redeterminaciones</div>
+                <div class="sub">Dec. 800/16 · Córdoba</div>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section">Obra</div>
+                <button class="nav-item active" onclick="navigate('resumen')">
+                    <span class="icon">◈</span> Resumen
+                </button>
+                <button class="nav-item" onclick="navigate('estructura')">
+                    <span class="icon">⊞</span> Ítems y estructura
+                </button>
+                <button class="nav-item" onclick="navigate('versiones')">
+                    <span class="icon">⊕</span> Modificaciones
+                </button>
+                <div class="nav-section">Cálculo</div>
+                <button class="nav-item" onclick="navigate('plan')">
+                    <span class="icon">▦</span> Plan y avance
+                </button>
+                <button class="nav-item" onclick="navigate('iop')">
+                    <span class="icon">↗</span> Índices IOP
+                </button>
+                <button class="nav-item" onclick="navigate('adecuaciones')">
+                    <span class="icon">≡</span> Adecuaciones
+                </button>
+            </nav>
+        </aside>
+
+        <!-- MAIN -->
+        <div class="main">
+
+            <!-- TOPBAR -->
+            <div class="topbar">
+                <div>
+                    <div class="topbar-title" id="topbar-title">Resumen de obra</div>
+                    <div class="topbar-sub" id="topbar-sub">Edificio Municipal — Córdoba Capital</div>
+                </div>
+                <div class="topbar-actions">
+                    <span id="iop-status-pill" class="tag tag-warn">IOP acum. +6.4% — falta +3.6%</span>
+                    <button class="btn btn-sm" onclick="openModal('modal-nueva-obra')">+ Nueva obra</button>
+                </div>
+            </div>
+
+            <!-- CONTENT -->
+            <div class="content">
+
+                <!-- ═══ RESUMEN ═══ -->
+                <div id="screen-resumen" class="screen active">
+                    <div class="grid4" style="margin-bottom:16px">
+                        <div class="metric">
+                            <div class="metric-label">Contrato original</div>
+                            <div class="metric-val num" id="r-contrato">$2.840.000</div>
+                            <div class="metric-sub">6 ítems</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Monto vigente</div>
+                            <div class="metric-val num" id="r-vigente">$2.671.000</div>
+                            <div class="metric-sub">2 modificaciones</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Total adecuado</div>
+                            <div class="metric-val num" id="r-adecuado">$318.450</div>
+                            <div class="metric-sub">4 adecuaciones</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Avance real</div>
+                            <div class="metric-val num">68.2%</div>
+                            <div class="metric-sub">Ponderado sobre contrato</div>
+                        </div>
+                    </div>
+
+                    <div class="grid2">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Adecuaciones calculadas</div>
+                                    <div class="card-sub">Historial completo</div>
+                                </div>
+                                <button class="btn btn-sm btn-primary" onclick="navigate('adecuaciones')">Ver
+                                    todas</button>
+                            </div>
+                            <div id="resumen-adecuaciones-list"></div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">Avance por ítem</div>
+                            </div>
+                            <div id="resumen-avance-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══ ITEMS Y ESTRUCTURA ═══ -->
+                <div id="screen-estructura" class="screen">
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Ítems del contrato</div>
+                                <div class="card-sub">Cada ítem tiene su propia estructura de costos (polinómica)</div>
+                            </div>
+                            <div style="display:flex;gap:8px">
+                                <button class="btn" onclick="descargarPlantilla()">⬇ Plantilla Excel</button>
+                                <label class="btn btn-primary" style="cursor:pointer">
+                                    ⬆ Importar Excel
+                                    <input type="file" accept=".xlsx" style="display:none"
+                                        onchange="importarItemsExcel(this)">
+                                </label>
+                            </div>
+                        </div>
+                        <div class="tbl-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Ítem</th>
+                                        <th>Unidad</th>
+                                        <th>Cantidad</th>
+                                        <th>Precio unit.</th>
+                                        <th>Total</th>
+                                        <th>Estructura de costos</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="items-tbody"></tbody>
+                            </table>
+                        </div>
+                        <div id="items-empty" class="empty" style="display:none">
+                            <div class="empty-icon">⊞</div>
+                            <div class="empty-title">Sin ítems cargados</div>
+                            <div class="empty-sub">Agregá el primer ítem del contrato original</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══ MODIFICACIONES ═══ -->
+                <div id="screen-versiones" class="screen">
+                    <div class="alert alert-info">
+                        ℹ Las modificaciones de obra crean nuevas versiones de cantidad por ítem con fecha de inicio.
+                        Los cálculos
+                        históricos no se modifican.
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Modificaciones de obra</div>
+                                <div class="card-sub">Economías y demasías</div>
+                            </div>
+                            <button class="btn btn-primary" onclick="openModal('modal-nueva-version')">+ Nueva
+                                modificación</button>
+                        </div>
+                        <div class="tbl-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Ítem</th>
+                                        <th>Cantidad anterior</th>
+                                        <th>Cantidad nueva</th>
+                                        <th>Diferencia</th>
+                                        <th>Tipo</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="versiones-tbody"></tbody>
+                            </table>
+                        </div>
+                        <div id="versiones-empty" class="empty">
+                            <div class="empty-icon">⊕</div>
+                            <div class="empty-title">Sin modificaciones</div>
+                            <div class="empty-sub">Las economías y demasías aparecerán aquí</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Modificaciones del plan de trabajo</div>
+                                <div class="card-sub">Actualizaciones al plan de avance original</div>
+                            </div>
+                            <button class="btn btn-primary" onclick="openModal('modal-nuevo-plan-mod')">+ Modificar
+                                plan</button>
+                        </div>
+                        <div id="plan-mods-list">
+                            <div class="empty">
+                                <div class="empty-icon">▦</div>
+                                <div class="empty-title">Sin modificaciones de plan</div>
+                                <div class="empty-sub">Las versiones del plan aparecerán aquí</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══ PLAN Y AVANCE ═══ -->
+                <div id="screen-plan" class="screen">
+                    <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px">
+                        <div class="form-group" style="flex:0 0 200px;margin-bottom:0">
+                            <label>Ítem</label>
+                            <select id="plan-item-select" onchange="renderPlanTable()">
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex:0 0 140px;margin-bottom:0">
+                            <label>Período</label>
+                            <select id="plan-periodo-select">
+                            </select>
+                        </div>
+                        <div style="align-self:flex-end">
+                            <button class="btn btn-primary" onclick="openModal('modal-cargar-avance')">+ Cargar avance
+                                real</button>
+                        </div>
+                    </div>
+
+                    <div class="grid2">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">Plan de avance (en cantidades)</div>
+                            </div>
+                            <div class="tbl-wrap">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Período</th>
+                                            <th>Cant. plan</th>
+                                            <th>Cant. vigente</th>
+                                            <th>% efectivo</th>
+                                            <th>Acum.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="plan-tbody"></tbody>
+                                </table>
+                            </div>
+                            <div style="margin-top:12px">
+                                <button class="btn btn-sm" onclick="openModal('modal-cargar-plan')">+ Cargar período de
+                                    plan</button>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">Remanente</div>
+                                <div class="card-sub" id="plan-rem-periodo">—</div>
+                            </div>
+                            <div id="plan-remanente-cards"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══ IOP ═══ -->
+                <div id="screen-iop" class="screen">
+                    <div class="grid2">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Índices IOP mensuales</div>
+                                    <div class="card-sub">IOP Córdoba — Dirección de Obra Pública</div>
+                                </div>
+                                <button class="btn btn-primary" onclick="openModal('modal-nuevo-iop')">+ Cargar
+                                    índice</button>
+                            </div>
+                            <div class="tbl-wrap">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Período</th>
+                                            <th>IOP</th>
+                                            <th>Base activa</th>
+                                            <th>Var. acum.</th>
+                                            <th>Estado</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="iop-tbody"></tbody>
+                                </table>
+                            </div>
+                            <div id="iop-empty" class="empty" style="display:none">
+                                <div class="empty-icon">↗</div>
+                                <div class="empty-title">Sin índices cargados</div>
+                                <div class="empty-sub">Cargá el IOP base inicial y los siguientes meses</div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="card">
+                                <div class="card-title" style="margin-bottom:14px">Parámetros del gatillo</div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Gatillo (%)</label>
+                                        <input type="number" id="gatillo-val" value="10" min="1" max="50"
+                                            onchange="recalcIOP()">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Período base inicial</label>
+                                        <input type="month" id="gatillo-base" onchange="recalcIOP()">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card">
+                                <div class="card-title" style="margin-bottom:14px">Estado actual del gatillo</div>
+                                <div id="iop-estado-cards"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══ ADECUACIONES ═══ -->
+                <div id="screen-adecuaciones" class="screen">
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Control de adecuaciones</div>
+                                <div class="card-sub">Condiciones de procedencia por período</div>
+                            </div>
+                            <button class="btn btn-primary" onclick="calcularAdecuacion()">Calcular nueva
+                                adecuación</button>
+                        </div>
+                        <div class="tbl-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Período</th>
+                                        <th>IOP base</th>
+                                        <th>IOP actual</th>
+                                        <th>Variación</th>
+                                        <th>Gatillo</th>
+                                        <th>Empresa pidió</th>
+                                        <th>Procede</th>
+                                        <th>Monto</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adec-control-tbody"></tbody>
+                            </table>
+                        </div>
+                        <div id="adec-empty" class="empty">
+                            <div class="empty-icon">≡</div>
+                            <div class="empty-title">Sin adecuaciones registradas</div>
+                            <div class="empty-sub">Cargá los índices IOP y el avance real para calcular</div>
+                        </div>
+                    </div>
+
+                    <div id="adec-detalle-section" style="display:none">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title" id="adec-detalle-titulo">Detalle adecuación</div>
+                                    <div class="card-sub" id="adec-detalle-sub"></div>
+                                </div>
+                                <div style="display:flex;gap:8px">
+                                    <button class="btn btn-sm" onclick="exportarAdecuacion()">⬇ Exportar</button>
+                                </div>
+                            </div>
+                            <div class="tbl-wrap">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Ítem</th>
+                                            <th>Precio vigente</th>
+                                            <th>Rem. teórico</th>
+                                            <th>Rem. real</th>
+                                            <th>Rem. aplicado</th>
+                                            <th>Factor IOP</th>
+                                            <th>Adecuación</th>
+                                            <th>Nota</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="adec-detalle-tbody"></tbody>
+                                </table>
+                            </div>
+                            <div class="divider"></div>
+                            <div style="display:flex;justify-content:space-between;align-items:flex-end">
+                                <div id="adec-totales"></div>
+                                <div style="font-size:11px;color:var(--text2);text-align:right" id="adec-bases"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /content -->
+        </div><!-- /main -->
+    </div><!-- /app-shell -->
+
+    <!-- ═══ MODALS ═══ -->
+
+    <!-- Nueva obra -->
+    <div class="modal-overlay" id="modal-nueva-obra">
+        <div class="modal">
+            <div class="modal-head">
+                <div class="modal-title">Nueva obra</div>
+                <button class="modal-close" onclick="closeModal('modal-nueva-obra')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nombre de la obra</label>
+                        <input type="text" id="obra-nombre" placeholder="Ej: Edificio Municipal Córdoba">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Expediente / Número</label>
+                        <input type="text" id="obra-expediente" placeholder="Ej: EXP-2024-01234">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha de contrato</label>
+                        <input type="month" id="obra-fecha">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Contratista</label>
+                        <input type="text" id="obra-contratista">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeModal('modal-nueva-obra')">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardarObra()">Guardar obra</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Estructura costos detalle (ver) -->
+    <div class="modal-overlay" id="modal-ver-estructura">
+        <div class="modal" style="max-width:500px">
+            <div class="modal-head">
+                <div class="modal-title" id="ver-estructura-titulo">Estructura de costos</div>
+                <button class="modal-close" onclick="closeModal('modal-ver-estructura')">×</button>
+            </div>
+            <div class="modal-body">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Factor</th>
+                            <th>Ponderación</th>
+                            <th>Índice</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ver-estructura-tbody"></tbody>
+                </table>
+            </div>
+            <div class="modal-foot">
+                <button class="btn btn-primary" onclick="closeModal('modal-ver-estructura')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nueva modificación de obra -->
+    <div class="modal-overlay" id="modal-nueva-version">
+        <div class="modal">
+            <div class="modal-head">
+                <div class="modal-title">Nueva modificación de obra</div>
+                <button class="modal-close" onclick="closeModal('modal-nueva-version')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Ítem afectado</label>
+                        <select id="mod-item-select"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha desde (período)</label>
+                        <input type="month" id="mod-fecha">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Cantidad nueva</label>
+                        <input type="number" id="mod-cantidad" step="any" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Motivo</label>
+                        <input type="text" id="mod-motivo" placeholder="Ej: Economía por supresión de rubro">
+                    </div>
+                </div>
+                <div id="mod-diferencia-info" style="margin-top:8px"></div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeModal('modal-nueva-version')">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardarVersion()">Guardar modificación</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cargar plan -->
+    <div class="modal-overlay" id="modal-cargar-plan">
+        <div class="modal">
+            <div class="modal-head">
+                <div class="modal-title">Cargar período de plan</div>
+                <button class="modal-close" onclick="closeModal('modal-cargar-plan')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Ítem</label>
+                        <select id="plan-item-modal"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Período</label>
+                        <input type="month" id="plan-periodo-modal">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Cantidad planificada</label>
+                        <input type="number" id="plan-cantidad-modal" step="any" placeholder="0">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeModal('modal-cargar-plan')">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardarPlan()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cargar avance real -->
+    <div class="modal-overlay" id="modal-cargar-avance">
+        <div class="modal">
+            <div class="modal-head">
+                <div class="modal-title">Cargar avance real (certificado)</div>
+                <button class="modal-close" onclick="closeModal('modal-cargar-avance')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Ítem</label>
+                        <select id="real-item-modal"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Período</label>
+                        <input type="month" id="real-periodo-modal">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Cantidad ejecutada</label>
+                        <input type="number" id="real-cantidad-modal" step="any" placeholder="0">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeModal('modal-cargar-avance')">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardarReal()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nuevo IOP -->
+    <div class="modal-overlay" id="modal-nuevo-iop">
+        <div class="modal" style="max-width:420px">
+            <div class="modal-head">
+                <div class="modal-title">Cargar índice IOP</div>
+                <button class="modal-close" onclick="closeModal('modal-nuevo-iop')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Período</label>
+                        <input type="month" id="iop-periodo-modal">
+                    </div>
+                    <div class="form-group">
+                        <label>Valor IOP</label>
+                        <input type="number" id="iop-valor-modal" step="any" placeholder="Ej: 1250.5">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeModal('modal-nuevo-iop')">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardarIOP()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nueva adecuación (control) -->
+    <div class="modal-overlay" id="modal-nueva-adec">
+        <div class="modal" style="max-width:480px">
+            <div class="modal-head">
+                <div class="modal-title">Registrar control de adecuación</div>
+                <button class="modal-close" onclick="closeModal('modal-nueva-adec')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Período</label>
+                        <select id="adec-periodo-select"></select>
+                    </div>
+                </div>
+                <div id="adec-modal-iop-info" style="margin:8px 0"></div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>¿La empresa pidió la adecuación?</label>
+                        <select id="adec-empresa-pidio">
+                            <option value="no">No</option>
+                            <option value="si">Sí</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeModal('modal-nueva-adec')">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardarAdecuacion()">Calcular y guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="./js/state.js"></script>
+    <script src="./js/engine.js"></script>
+    <script src="./js/ui.js"></script>
+    <script src="./js/screens/resumen.js"></script>
+    <script src="./js/screens/estructura.js"></script>
+    <script src="./js/screens/versiones.js"></script>
+    <script src="./js/screens/plan.js"></script>
+    <script src="./js/screens/iop.js"></script>
+    <script src="./js/screens/adecuaciones.js"></script>
+    <script src="js/main.js"></script>
+</body>
+
+</html>
