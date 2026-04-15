@@ -1,6 +1,9 @@
 // ═══════════════════════════════════════════════
 // PLAN Y AVANCE
 // ═══════════════════════════════════════════════
+
+let planObra = [];
+
 function renderPlanScreen() {
   const sel = document.getElementById('plan-item-select');
   sel.innerHTML = state.items.map(i => `<option value="${i.id}">${i.nombre}</option>`).join('');
@@ -92,4 +95,80 @@ function guardarReal() {
   state.real = state.real.filter(r => !(r.itemId === itemId && r.periodo === periodo));
   state.real.push({ itemId, periodo, cantidad });
   save(); closeModal('modal-cargar-avance'); renderPlanTable();
+}
+
+function descargarPlantilla() {
+  const dias = Number(document.getElementById("obra-duracion-dias").value);
+  const meses = Math.ceil(dias / 30);
+
+  const headers = ["Item", "Unidad"];
+
+  for (let i = 1; i <= meses; i++) {
+    headers.push(`Mes ${i}`);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet([headers]);
+  const wb = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(wb, ws, "Plan de Avance");
+
+  XLSX.writeFile(wb, "plan_avance.xlsx");
+}
+
+function cargarPlanExcel(event) {
+  const file = event.target.files[0];
+
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, { type: "array" });
+
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+
+    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+    procesarPlanExcel(json);
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
+function procesarPlanExcel(data) {
+  const headers = data[0];
+  const filas = data.slice(1);
+
+  const meses = headers.slice(2);
+
+  planObra = filas.map(f => {
+    return {
+      item: f[0],
+      unidad: f[1],
+      avanceMensual: f.slice(2).map(v => Number(v) || 0)
+    };
+  });
+
+  renderPlanTable();
+}
+
+function renderPlanTable() {
+  const tbody = document.getElementById("plan-tbody");
+  tbody.innerHTML = "";
+
+  planObra.forEach(p => {
+    const total = p.avanceMensual.reduce((a, b) => a + b, 0);
+
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+            <td>${p.item}</td>
+            <td>${p.unidad}</td>
+            <td>${total}</td>
+            <td>100%</td>
+            <td>${total}</td>
+        `;
+
+    tbody.appendChild(tr);
+  });
 }

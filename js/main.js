@@ -10,7 +10,8 @@ async function guardarObra() {
         expediente: document.getElementById('obra-expediente').value.trim(),
         fechaApertura: document.getElementById('obra-fecha-apertura').value,
         fecha: document.getElementById('obra-fecha').value,
-        contratista: document.getElementById('obra-contratista').value.trim()
+        contratista: document.getElementById('obra-contratista').value.trim(),
+        duracionDias: Number(document.getElementById("obra-duracion-dias").value)
     };
 
     if (state._sinGuardar) {
@@ -26,6 +27,18 @@ async function guardarObra() {
     renderTopbarObra();
     renderSelectorObras();
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+    const inputDias = document.getElementById("obra-duracion-dias");
+    const outputMeses = document.getElementById("obra-duracion-meses");
+
+    inputDias.addEventListener("input", function () {
+        const dias = Number(this.value);
+        const meses = Math.ceil(dias / 30);
+
+        outputMeses.value = isNaN(meses) ? "" : `${meses} meses`;
+    });
+});
 
 function renderTopbarObra() {
     const el = document.getElementById('topbar-sub');

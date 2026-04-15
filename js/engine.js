@@ -52,24 +52,16 @@ function remanente(itemId, periodo) {
     return { teorico, real, aplicado, nota };
 }
 
-// IOP helpers
-function getIOP(periodo) {
-    const entry = state.iop.find(i => i.periodo === periodo);
-    return entry ? entry.valor : null;
-}
 function calcIopBase(periodo) {
-    // Find the active base: last adecuacion before this period, or gatillo-base
-    const adecAntes = state.adecuaciones
-        .filter(a => a.periodo < periodo && a.procede)
-        .sort((a, b) => b.periodo.localeCompare(a.periodo));
-    if (adecAntes.length) return adecAntes[0].periodo;
-    return state.iopBase;
-}
-function variacionIOP(periodo) {
-    const base = calcIopBase(periodo);
-    if (!base) return null;
-    const vBase = getIOP(base);
-    const vActual = getIOP(periodo);
-    if (!vBase || !vActual) return null;
-    return vActual / vBase - 1;
+    // Busca la última adecuación que procede con período < al dado
+    const adecuaciones = (state.adecuaciones || [])
+        .filter(a => a.procede && a.periodo < periodo)
+        .sort((a, b) => a.periodo.localeCompare(b.periodo));
+
+    if (adecuaciones.length > 0) {
+        return adecuaciones[adecuaciones.length - 1].periodo;
+    }
+
+    // Si no hay adecuaciones que procedan, usa la base inicial
+    return state.iopBase || null;
 }

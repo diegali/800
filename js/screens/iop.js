@@ -16,7 +16,7 @@ function renderIOP() {
 
     // Poblar select de período base con los períodos disponibles
     const baseSelect = document.getElementById('gatillo-base');
-    const periodos = Object.keys(state.iop || {}).sort();
+    const periodos = Object.keys(state.iop || {}).filter(p => p !== '_orden').sort();
     baseSelect.innerHTML = `<option value="">— Sin base —</option>`
         + periodos.map(p => `<option value="${p}" ${p === state.iopBase ? 'selected' : ''}>${periodoLabel(p)}</option>`).join('');
 
@@ -46,7 +46,7 @@ async function importarIOP() {
         // Encontrar fila header: "Orden" en col 0, "Factor" en col 1
         const headerIdx = rows.findIndex(r =>
             r && String(r[0] || '').trim().toLowerCase() === 'orden' &&
-                 String(r[1] || '').trim().toLowerCase() === 'factor'
+            String(r[1] || '').trim().toLowerCase() === 'factor'
         );
 
         if (headerIdx === -1) {
@@ -89,10 +89,11 @@ async function importarIOP() {
         const periodosExistentes = new Set(Object.keys(state.iop || {}));
 
         const dataRows = rows.slice(headerIdx + 1);
+        const iopOrden = { ...(state.iopOrden || {}) };
 
         for (const fila of dataRows) {
             if (!fila) continue;
-            // Col 1 = nombre del factor (col 0 es el número de orden)
+            const orden = fila[0] != null ? parseInt(fila[0]) : null;
             const nombre = fila[1] != null ? String(fila[1]).trim() : null;
             if (!nombre) continue;
 
@@ -104,13 +105,18 @@ async function importarIOP() {
                 if (isNaN(valor)) continue;
 
                 if (!nuevoIOP[periodo]) nuevoIOP[periodo] = {};
-                nuevoIOP[periodo][nombre] = valor;
+                nuevoIOP[periodo][nombre.trim()] = valor;
+                // Guardar orden del factor separado
+                if (!iopOrden[nombre] && orden != null) {
+                    iopOrden[nombre] = orden;
+                }
             }
         }
 
         const periodosNuevos = Object.keys(nuevoIOP).filter(p => !periodosExistentes.has(p)).sort();
 
         state.iop = nuevoIOP;
+        state.iopOrden = iopOrden;
 
         if (!state.iopBase) {
             const primero = Object.keys(nuevoIOP).sort()[0];
@@ -215,12 +221,12 @@ function renderIOPEstado() {
         <div class="metric" style="margin-bottom:10px">
             <div class="metric-label">Base activa</div>
             <div class="metric-val" style="font-size:15px">${periodoLabel(base)}</div>
-            <div class="metric-sub">IOP ${vBase != null ? vBase.toLocaleString('es-AR', {maximumFractionDigits:2}) : '—'}</div>
+            <div class="metric-sub">IOP ${vBase != null ? vBase.toLocaleString('es-AR', { maximumFractionDigits: 2 }) : '—'}</div>
         </div>
         <div class="metric" style="margin-bottom:10px">
             <div class="metric-label">Último período cargado</div>
             <div class="metric-val" style="font-size:15px">${periodoLabel(lastPeriodo)}</div>
-            <div class="metric-sub">IOP ${vActual != null ? vActual.toLocaleString('es-AR', {maximumFractionDigits:2}) : '—'}</div>
+            <div class="metric-sub">IOP ${vActual != null ? vActual.toLocaleString('es-AR', { maximumFractionDigits: 2 }) : '—'}</div>
         </div>
         <div class="metric" style="background:${supera ? 'var(--ok-bg)' : 'var(--warn-bg)'}">
             <div class="metric-label" style="color:${supera ? 'var(--ok)' : 'var(--warn)'}">Variación acumulada</div>
@@ -229,10 +235,10 @@ function renderIOPEstado() {
             </div>
             <div class="metric-sub" style="color:${supera ? 'var(--ok)' : 'var(--warn)'}">
                 ${supera
-                    ? '✓ Gatillo superado — procede adecuación'
-                    : falta !== null
-                        ? 'Falta +' + (falta * 100).toFixed(2) + '% para el gatillo de ' + gatillo + '%'
-                        : ''}
+            ? '✓ Gatillo superado — procede adecuación'
+            : falta !== null
+                ? 'Falta +' + (falta * 100).toFixed(2) + '% para el gatillo de ' + gatillo + '%'
+                : ''}
             </div>
         </div>`;
 
@@ -277,7 +283,7 @@ function updateIOPStatusPill() {
 
 function renderIOPMatriz() {
     const table = document.getElementById('iop-matrix');
-    const periodos = Object.keys(state.iop || {}).sort();
+    const periodos = Object.keys(state.iop || {}).filter(p => p !== '_orden').sort();
 
     if (!periodos.length) {
         table.innerHTML = `<tbody><tr><td colspan="3" style="text-align:center;padding:32px;color:var(--text-2);font-size:13px">
@@ -287,10 +293,11 @@ function renderIOPMatriz() {
     }
 
     // Lista de factores: del primer período con datos
-    const primerPeriodo = periodos.find(p => Object.keys(state.iop[p] || {}).length > 0);
-    if (!primerPeriodo) { table.innerHTML = ''; return; }
+    const orden = state.iopOrden || {};
+    const factores = Object.keys(orden)
+        .sort((a, b) => orden[a] - orden[b]);
 
-    const factores = Object.keys(state.iop[primerPeriodo]).sort();
+    if (!factores.length) { table.innerHTML = ''; return; }
 
     let html = '<thead><tr>';
     html += `<th class="sticky-header sticky-col-nro">N°</th>`;
@@ -299,9 +306,9 @@ function renderIOPMatriz() {
     periodos.forEach(p => {
         const esBase = p === state.iopBase;
         html += `<th class="sticky-header" style="${esBase ? 'background:#e8f0fe;color:var(--accent)' : ''}">`
-              + periodoLabel(p)
-              + (esBase ? '<br><span style="font-size:9px;font-weight:400;opacity:.8">BASE</span>' : '')
-              + '</th>';
+            + periodoLabel(p)
+            + (esBase ? '<br><span style="font-size:9px;font-weight:400;opacity:.8">BASE</span>' : '')
+            + '</th>';
     });
     html += '</tr></thead><tbody>';
 
@@ -312,7 +319,7 @@ function renderIOPMatriz() {
         periodos.forEach(p => {
             const valor = state.iop[p] ? state.iop[p][factor] : null;
             html += valor != null
-                ? `<td>${valor.toLocaleString('es-AR', {maximumFractionDigits: 2})}</td>`
+                ? `<td>${valor.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</td>`
                 : `<td style="color:#ccc;text-align:center">—</td>`;
         });
         html += '</tr>';
