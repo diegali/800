@@ -2,9 +2,20 @@
 // RESUMEN
 // ═══════════════════════════════════════════════
 function renderResumen() {
+    // Info de la obra
+    const infoEl = document.getElementById('resumen-obra-info');
+    if (infoEl) {
+        const o = state.obra || {};
+        const partes = [];
+        if (o.expediente) partes.push(o.expediente);
+        if (o.contratista) partes.push(o.contratista);
+        if (o.fechaReplanteo) partes.push(`Replanteo: ${periodoLabel(o.fechaReplanteo)}`);
+        if (o.duracionDias) partes.push(`${Math.ceil(o.duracionDias / 30)} meses`);
+        infoEl.textContent = partes.join(' · ');
+    }
     const totalOrig = state.items.reduce((s, i) => s + i.cantidad * i.precio, 0);
     const totalVig = state.items.reduce((s, i) => {
-        const lastPeriodo = state.iop.length ? [...state.iop].sort((a, b) => b.periodo.localeCompare(a.periodo))[0].periodo : '9999-12';
+        const lastPeriodo = Object.keys(window.iopGlobal || {}).sort().pop() || '9999-12';
         return s + cantidadVigente(i.id, lastPeriodo) * i.precio;
     }, 0);
     const totalAdec = state.adecuaciones.filter(a => a.procede).reduce((s, a) => s + a.total, 0);

@@ -16,7 +16,8 @@ function navigate(screen) {
         resumen: 'Resumen de obra',
         estructura: 'Ítems y estructura de costos',
         versiones: 'Modificaciones de obra',
-        plan: 'Plan de avance y avance real',
+        plan: 'Plan de avance',
+        real: 'Avance real',
         iop: 'Índices IOP',
         adecuaciones: 'Adecuaciones provisorias'
     };
@@ -38,6 +39,7 @@ function renderScreen(screen) {
     if (screen === 'estructura') renderItems();
     if (screen === 'versiones') renderVersiones();
     if (screen === 'plan') renderPlanScreen();
+    if (screen === 'real') renderRealScreen();
     if (screen === 'iop') renderIOP();
     if (screen === 'adecuaciones') renderAdecuaciones();
 }

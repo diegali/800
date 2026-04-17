@@ -5,6 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Redeterminaciones 800/16 — Córdoba</title>
+    <link rel="manifest" href="/manifest.json">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js');
+        }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link
         href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap"
@@ -49,7 +55,10 @@
                     </button>
                     <div class="nav-section">Cálculo</div>
                     <button class="nav-item" onclick="navigate('plan')">
-                        <span class="icon">▦</span> Plan y avance
+                        <span class="icon">▦</span> Plan de avance
+                    </button>
+                    <button class="nav-item" onclick="navigate('real')">
+                        <span class="icon">✓</span> Avance real
                     </button>
                     <button class="nav-item" onclick="navigate('iop')">
                         <span class="icon">↗</span> Índices IOP
@@ -80,6 +89,10 @@
 
                     <!-- ═══ RESUMEN ═══ -->
                     <div id="screen-resumen" class="screen active">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                            <div id="resumen-obra-info" style="font-size:13px;color:var(--text2)"></div>
+                            <button class="btn btn-sm" onclick="abrirEditarObra()">✏️ Editar obra</button>
+                        </div>
                         <div class="grid4" style="margin-bottom:16px">
                             <div class="metric">
                                 <div class="metric-label">Contrato original</div>
@@ -251,60 +264,71 @@
                         </div>
                     </div>
 
-                    <!-- ═══ PLAN Y AVANCE ═══ -->
+                    <!-- ═══ PLAN DE AVANCE ═══ -->
                     <div id="screen-plan" class="screen">
-                        <button class="btn" onclick="descargarPlantilla()">Descargar plantilla</button>
-                        <input type="file" id="plan-file" accept=".xlsx" onchange="cargarPlanExcel(event)">
-                        <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px">
-                            <div class="form-group" style="flex:0 0 200px;margin-bottom:0">
-                                <label>Ítem</label>
-                                <select id="plan-item-select" onchange="renderPlanTable()">
-                                </select>
+                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+                            <button class="btn" onclick="descargarPlantilla()">↓ Descargar plantilla</button>
+                            <button class="btn btn-primary" onclick="document.getElementById('plan-file').click()">↑
+                                Importar plan Excel</button>
+                            <input type="file" id="plan-file" accept=".xlsx" style="display:none"
+                                onchange="cargarPlanExcel(event)">
+                            <button class="btn" onclick="openModal('modal-cargar-plan')" style="margin-left:auto">+
+                                Cargar período manual</button>
+                        </div>
+                        <div class="card" style="margin-bottom:16px">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Plan de avance (en cantidades)</div>
+                                    <div class="card-sub">Todos los ítems · todos los períodos</div>
+                                </div>
                             </div>
-                            <div class="form-group" style="flex:0 0 140px;margin-bottom:0">
-                                <label>Período</label>
-                                <select id="plan-periodo-select">
-                                </select>
-                            </div>
-                            <div style="align-self:flex-end">
-                                <button class="btn btn-primary" onclick="openModal('modal-cargar-avance')">+ Cargar
-                                    avance
-                                    real</button>
+                            <div class="tbl-wrap" style="overflow-x:auto;max-height:55vh">
+                                <table id="plan-tabla-completa" style="min-width:100%">
+                                    <thead id="plan-thead"></thead>
+                                    <tbody id="plan-tbody"></tbody>
+                                </table>
                             </div>
                         </div>
-
-                        <div class="grid2">
-                            <div class="card">
-                                <div class="card-header">
-                                    <div class="card-title">Plan de avance (en cantidades)</div>
-                                </div>
-                                <div class="tbl-wrap">
-                                    <table>
-                                        <thead>
-                                            <tr>
-                                                <th>Período</th>
-                                                <th>Cant. plan</th>
-                                                <th>Cant. vigente</th>
-                                                <th>% efectivo</th>
-                                                <th>Acum.</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="plan-tbody"></tbody>
-                                    </table>
-                                </div>
-                                <div style="margin-top:12px">
-                                    <button class="btn btn-sm" onclick="openModal('modal-cargar-plan')">+ Cargar período
-                                        de
-                                        plan</button>
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">Remanente por ítem</div>
+                                <div style="display:flex;gap:8px;align-items:center">
+                                    <label style="font-size:12px;color:var(--text2)">Ítem</label>
+                                    <select id="plan-item-select" onchange="renderRemCards()"
+                                        style="font-size:12px"></select>
+                                    <label style="font-size:12px;color:var(--text2)">Período</label>
+                                    <select id="plan-periodo-select" onchange="renderRemCards()"
+                                        style="font-size:12px"></select>
                                 </div>
                             </div>
+                            <div id="plan-remanente-cards" style="display:flex;gap:12px;flex-wrap:wrap;padding:8px 0">
+                            </div>
+                        </div>
+                    </div>
 
-                            <div class="card">
-                                <div class="card-header">
-                                    <div class="card-title">Remanente</div>
-                                    <div class="card-sub" id="plan-rem-periodo">—</div>
+                    <!-- ═══ AVANCE REAL ═══ -->
+                    <div id="screen-real" class="screen">
+                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+                            <button class="btn" onclick="descargarPlantillaReal()">↓ Descargar plantilla</button>
+                            <button class="btn btn-primary" onclick="document.getElementById('real-file').click()">↑
+                                Importar real Excel</button>
+                            <input type="file" id="real-file" accept=".xlsx" style="display:none"
+                                onchange="cargarRealExcel(event)">
+                            <button class="btn" onclick="openModal('modal-cargar-avance')" style="margin-left:auto">+
+                                Cargar período manual</button>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Avance real certificado (en cantidades)</div>
+                                    <div class="card-sub">Todos los ítems · todos los períodos</div>
                                 </div>
-                                <div id="plan-remanente-cards"></div>
+                            </div>
+                            <div class="tbl-wrap" style="overflow-x:auto;max-height:65vh">
+                                <table id="real-tabla-completa" style="min-width:100%">
+                                    <thead id="real-thead"></thead>
+                                    <tbody id="real-tbody"></tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -366,6 +390,20 @@
 
                     <!-- ═══ ADECUACIONES ═══ -->
                     <div id="screen-adecuaciones" class="screen">
+
+                        <div class="card" style="margin-bottom:16px">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Estado del gatillo por período</div>
+                                    <div class="card-sub">Variación IOP acumulada desde la base activa</div>
+                                </div>
+                            </div>
+                            <div id="adec-gatillo-container"></div>
+                            <div id="adec-gatillo-empty" class="empty" style="display:none">
+                                <div class="empty-sub">Sin índices IOP cargados o sin base definida</div>
+                            </div>
+                        </div>
+
                         <div class="card">
                             <div class="card-header">
                                 <div>
@@ -477,6 +515,10 @@
                         <label>Fecha de contrato</label>
                         <input type="month" id="obra-fecha">
                     </div>
+                    <div class="form-group">
+                        <label>Fecha de replanteo</label>
+                        <input type="month" id="obra-fecha-replanteo">
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Duración de la obra (días)</label>
@@ -493,6 +535,62 @@
             <div class="modal-foot">
                 <button class="btn" onclick="closeModal('modal-nueva-obra')">Cancelar</button>
                 <button class="btn btn-primary" onclick="guardarObra()">Guardar obra</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL EDITAR OBRA -->
+    <div class="modal-overlay" id="modal-editar-obra">
+        <div class="modal">
+            <div class="modal-head">
+                <div class="modal-title">Editar obra</div>
+                <button class="modal-close" onclick="closeModal('modal-editar-obra')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nombre de la obra</label>
+                        <input type="text" id="edit-obra-nombre" placeholder="Ej: Edificio Municipal Córdoba">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Expediente / Número</label>
+                        <input type="text" id="edit-obra-expediente" placeholder="Ej: EXP-2024-01234">
+                    </div>
+                    <div class="form-group">
+                        <label>Contratista</label>
+                        <input type="text" id="edit-obra-contratista">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Fecha de apertura</label>
+                        <input type="month" id="edit-obra-fecha-apertura">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha de contrato</label>
+                        <input type="month" id="edit-obra-fecha">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha de replanteo</label>
+                        <input type="month" id="edit-obra-fecha-replanteo">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Duración de la obra (días)</label>
+                        <input type="number" id="edit-obra-duracion-dias" min="1" placeholder="Ej: 365">
+                    </div>
+                    <div class="form-group">
+                        <label>Meses estimados</label>
+                        <input type="text" id="edit-obra-duracion-meses" disabled>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeModal('modal-editar-obra')">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardarEdicionObra()">Guardar cambios</button>
             </div>
         </div>
     </div>

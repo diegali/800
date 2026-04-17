@@ -15,6 +15,7 @@ function fmtPct(n) {
 }
 function periodoLabel(p) {
     if (!p) return '—';
+    if (p.startsWith('MES-')) return 'Mes ' + p.split('-')[1];
     const [y, m] = p.split('-');
     const meses = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     return meses[parseInt(m)] + ' ' + y;
@@ -54,14 +55,19 @@ function remanente(itemId, periodo) {
 
 function calcIopBase(periodo) {
     // Busca la última adecuación que procede con período < al dado
+    // y devuelve el período ANTERIOR a esa adecuación (regla de base correcta)
     const adecuaciones = (state.adecuaciones || [])
         .filter(a => a.procede && a.periodo < periodo)
         .sort((a, b) => a.periodo.localeCompare(b.periodo));
 
     if (adecuaciones.length > 0) {
-        return adecuaciones[adecuaciones.length - 1].periodo;
+        const ultimaAdec = adecuaciones[adecuaciones.length - 1];
+        // La base es el período anterior al gatillo, no el del gatillo mismo
+        const todosLosPeriodos = Object.keys(window.iopGlobal || {}).sort();
+        const idx = todosLosPeriodos.indexOf(ultimaAdec.periodo);
+        if (idx > 0) return todosLosPeriodos[idx - 1];
+        return ultimaAdec.periodo;
     }
 
-    // Si no hay adecuaciones que procedan, usa la base inicial
     return state.iopBase || null;
 }

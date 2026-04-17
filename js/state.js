@@ -1,13 +1,15 @@
-let obras = [];
-let state = obraVacia();
-const STORAGE_ACTIVA = 'redeterminaciones_obraActiva'; // Definimos la constante que faltaba
+window.obras = window.obras || [];
+let obras = window.obras;
+window.state = obraVacia();
+let state = window.state;
+const STORAGE_ACTIVA = 'redeterminaciones_obraActiva';
 
 function obraVacia() {
     return {
         id: Date.now(),
         fechaCreacion: new Date().toISOString().slice(0, 7),
         obra: { nombre: '', expediente: '', fecha: '', fechaApertura: '', contratista: '' },
-        items: [], versiones: [], plan: [], real: [], iop: [], adecuaciones: [],
+        items: [], versiones: [], plan: [], real: [], adecuaciones: [],
         gatillo: 10, iopBase: null, nextId: 1
     };
 }
@@ -20,20 +22,31 @@ function setObraActivaId(id) {
     localStorage.setItem(STORAGE_ACTIVA, String(id));
 }
 
-// Función para guardar TODO en la nube (Única fuente de verdad)
 async function save() {
     if (state._sinGuardar) return;
     try {
         const user = window.auth.currentUser;
         if (!user) return;
         const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-
-        await setDoc(doc(window.db, 'usuarios', user.uid), {
-            listaObras: obras,
-            activaId: getObraActivaId(),
+        await setDoc(doc(window.db, 'usuarios', user.uid, 'obras', String(state.id)), {
+            ...state,
             ultimaEdicion: new Date().toISOString()
         });
-        console.log("Sincronizado");
+        console.log("Obra guardada:", state.obra.nombre);
+    } catch (e) { console.error(e); }
+}
+
+async function saveIOP() {
+    try {
+        const user = window.auth.currentUser;
+        if (!user) return;
+        const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+        await setDoc(doc(window.db, 'usuarios', user.uid, 'iop', 'cordoba'), {
+            datos: window.iopGlobal,
+            orden: window.iopOrden || {},
+            ultimaEdicion: new Date().toISOString()
+        });
+        console.log("IOP guardado");
     } catch (e) { console.error(e); }
 }
 
@@ -42,22 +55,18 @@ async function crearNuevaObra(datosObra) {
     nueva.obra = { ...nueva.obra, ...datosObra };
     delete nueva._sinGuardar;
 
-    // Asegurarse de que el array obras esté inicializado
-    if (!Array.isArray(obras)) obras = [];
+    window.obras.push(nueva);
+    obras = window.obras;
 
-    obras.push(nueva);
     state = nueva;
+    window.state = state;
     setObraActivaId(nueva.id);
 
-    // 1. Guardar en la nube
     await save();
 
-    // 2. ACTUALIZAR LA INTERFAZ (Esto es lo que falta)
     if (typeof renderSelectorObras === 'function') renderSelectorObras();
     if (typeof renderTopbarObra === 'function') renderTopbarObra();
     if (typeof renderResumen === 'function') renderResumen();
-
-    // Si tenés una función para cerrar el modal desde aquí
     if (typeof closeModal === 'function') closeModal('modal-nueva-obra');
 
     return nueva;
@@ -67,89 +76,108 @@ function cambiarObraActiva(id) {
     const obra = obras.find(o => String(o.id) === String(id));
     if (!obra) return false;
     state = obra;
+    window.state = state;
     setObraActivaId(id);
     return true;
 }
 
 async function eliminarObra(id) {
+    try {
+        const user = window.auth.currentUser;
+        if (!user) return;
+        const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+        await deleteDoc(doc(window.db, 'usuarios', user.uid, 'obras', String(id)));
+    } catch (e) { console.error(e); }
+
     obras = obras.filter(o => String(o.id) !== String(id));
+    window.obras = obras;
+
     if (String(getObraActivaId()) === String(id)) {
         if (obras.length > 0) {
             state = obras[0];
+            window.state = state;
             setObraActivaId(state.id);
         } else {
             state = obraVacia();
+            window.state = state;
             state._sinGuardar = true;
         }
     }
-    await save(); // Sincronizamos el borrado
-    location.reload(); // Recargamos para limpiar la UI
+    location.reload();
 }
 
 async function descargarTodoDeNube() {
-    // Si ya hay una obra cargada en memoria, no volvemos a descargar (evita saltos)
-    if (window.obras && window.obras.length > 0) return;
     const user = window.auth.currentUser;
     if (!user) return;
 
     try {
-        const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-        const docSnap = await getDoc(doc(window.db, 'usuarios', user.uid));
+        const { collection, getDocs, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
 
-        // Forzamos que se vea la aplicación apenas detecta al usuario
         const pLogin = document.getElementById('pantalla-login');
         const pApp = document.getElementById('pantalla-app');
         if (pLogin) pLogin.style.display = 'none';
         if (pApp) pApp.style.display = 'block';
 
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            obras = data.listaObras || [];
-            const activaId = data.activaId;
+        // Cargar obras
+        const obrasSnap = await getDocs(collection(window.db, 'usuarios', user.uid, 'obras'));
+        obras = [];
+        obrasSnap.forEach(d => obras.push(d.data()));
+        obras.sort((a, b) => a.id - b.id);
+        window.obras = obras;
 
-            if (activaId) {
-                state = obras.find(o => String(o.id) === String(activaId)) || obras[0];
-                setObraActivaId(activaId);
-            } else if (obras.length > 0) {
-                state = obras[0];
-                setObraActivaId(state.id);
-            }
-
-            // Refrescar UI
-            if (typeof renderItems === 'function') renderItems();
-            if (typeof populateItemSelects === 'function') populateItemSelects();
-            if (typeof renderSelectorObras === 'function') renderSelectorObras();
-            if (typeof renderTopbarObra === 'function') renderTopbarObra();
-            if (typeof renderResumen === 'function') renderResumen();
-
-            console.log("Datos descargados de la nube");
+        // Cargar IOP global
+        const iopSnap = await getDoc(doc(window.db, 'usuarios', user.uid, 'iop', 'cordoba'));
+        if (iopSnap.exists()) {
+            window.iopGlobal = iopSnap.data().datos || {};
+            window.iopOrden = iopSnap.data().orden || {};
         } else {
-            console.log("Usuario nuevo: sin obras en la nube.");
-            state = obraVacia();
-            state._sinGuardar = true;
+            window.iopGlobal = {};
+            window.iopOrden = {};
+        }
+        window.iopGlobal = iopSnap.exists() ? (iopSnap.data().datos || {}) : {};
 
-            // Refrescar UI básica para usuario nuevo
-            if (typeof renderTopbarObra === 'function') renderTopbarObra();
-            if (typeof renderSelectorObras === 'function') renderSelectorObras();
+        // Activar obra
+        const activaId = getObraActivaId();
+        if (activaId) {
+            state = obras.find(o => String(o.id) === String(activaId)) || obras[0];
+        } else if (obras.length > 0) {
+            state = obras[0];
         }
 
-        // Quitar clase de carga si existe
+        if (state) {
+            window.state = state;
+            setObraActivaId(state.id);
+        } else {
+            state = obraVacia();
+            state._sinGuardar = true;
+            window.state = state;
+        }
+
+        if (typeof renderItems === 'function') renderItems();
+        if (typeof populateItemSelects === 'function') populateItemSelects();
+        if (typeof renderSelectorObras === 'function') renderSelectorObras();
+        if (typeof renderTopbarObra === 'function') renderTopbarObra();
+        if (typeof renderResumen === 'function') renderResumen();
+
         document.body.classList.remove('app-cargando');
+        console.log("Datos descargados. Obras:", obras.length);
 
     } catch (error) {
         console.error("Error al descargar:", error);
     }
 }
 
-// Listener de Auth (Se mantiene igual)
 window.addEventListener('load', () => {
     if (window.auth) {
         window.auth.onAuthStateChanged((user) => {
             if (user) descargarTodoDeNube();
             else {
                 obras = [];
+                window.obras = [];
+                window.iopGlobal = {};
                 state = obraVacia();
                 state._sinGuardar = true;
+                window.state = state;
             }
         });
     }

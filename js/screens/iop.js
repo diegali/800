@@ -1,30 +1,18 @@
 // ═══════════════════════════════════════════════
 // IOP — Índices de Obra Pública Córdoba
-//
-// Estructura de state.iop:
-//   Objeto { "YYYY-MM": { "NombreFactor": valor, ... }, ... }
-//
-// El Excel oficial tiene:
-//   Fila 6 : header — col A=Orden, col B=Factor, col C..=fechas (datetime)
-//   Filas 7+: datos  — col A=nro, col B=nombre, col C..=valores numéricos
 // ═══════════════════════════════════════════════
-
-// ── Render principal ──────────────────────────
 
 function renderIOP() {
     document.getElementById('gatillo-val').value = state.gatillo || 10;
 
-    // Poblar select de período base con los períodos disponibles
     const baseSelect = document.getElementById('gatillo-base');
-    const periodos = Object.keys(state.iop || {}).filter(p => p !== '_orden').sort();
+    const periodos = Object.keys(window.iopGlobal || {}).filter(p => p !== '_orden').sort();
     baseSelect.innerHTML = `<option value="">— Sin base —</option>`
         + periodos.map(p => `<option value="${p}" ${p === state.iopBase ? 'selected' : ''}>${periodoLabel(p)}</option>`).join('');
 
     renderIOPMatriz();
     renderIOPEstado();
 }
-
-// ── Importación desde Excel ───────────────────
 
 async function importarIOP() {
     const input = document.getElementById('iop-file');
@@ -33,17 +21,10 @@ async function importarIOP() {
 
     try {
         const data = await file.arrayBuffer();
-        // cellDates:false para manejar fechas manualmente via SSF
         const workbook = XLSX.read(data, { type: 'array', cellDates: false });
-
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(sheet, {
-            header: 1,
-            raw: true,
-            defval: null
-        });
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
 
-        // Encontrar fila header: "Orden" en col 0, "Factor" en col 1
         const headerIdx = rows.findIndex(r =>
             r && String(r[0] || '').trim().toLowerCase() === 'orden' &&
             String(r[1] || '').trim().toLowerCase() === 'factor'
@@ -55,27 +36,18 @@ async function importarIOP() {
         }
 
         const header = rows[headerIdx];
-
-        // Mapear columnas a período YYYY-MM
-        // Las fechas son seriales de Excel (números enteros como 42309 = 2015-11-01)
         const colPeriodo = {};
         for (let col = 2; col < header.length; col++) {
             const cell = header[col];
             if (cell == null) continue;
             let periodo = null;
-
             if (typeof cell === 'number') {
-                // Serial de fecha Excel → fecha JS
                 const parsed = XLSX.SSF.parse_date_code(cell);
-                if (parsed) {
-                    const mes = String(parsed.m).padStart(2, '0');
-                    periodo = `${parsed.y}-${mes}`;
-                }
+                if (parsed) periodo = `${parsed.y}-${String(parsed.m).padStart(2, '0')}`;
             } else if (typeof cell === 'string') {
                 const m = cell.match(/^(\d{4})-(\d{2})/);
                 if (m) periodo = `${m[1]}-${m[2]}`;
             }
-
             if (periodo) colPeriodo[col] = periodo;
         }
 
@@ -84,13 +56,11 @@ async function importarIOP() {
             return;
         }
 
-        // Construir IOP — merge sobre el estado existente
-        const nuevoIOP = { ...(state.iop || {}) };
-        const periodosExistentes = new Set(Object.keys(state.iop || {}));
+        window.iopGlobal = window.iopGlobal || {};
+        window.iopOrden = window.iopOrden || {};
+        const periodosExistentes = new Set(Object.keys(window.iopGlobal));
 
         const dataRows = rows.slice(headerIdx + 1);
-        const iopOrden = { ...(state.iopOrden || {}) };
-
         for (const fila of dataRows) {
             if (!fila) continue;
             const orden = fila[0] != null ? parseInt(fila[0]) : null;
@@ -104,88 +74,89 @@ async function importarIOP() {
                 const valor = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(',', '.'));
                 if (isNaN(valor)) continue;
 
-                if (!nuevoIOP[periodo]) nuevoIOP[periodo] = {};
-                nuevoIOP[periodo][nombre.trim()] = valor;
-                // Guardar orden del factor separado
-                if (!iopOrden[nombre] && orden != null) {
-                    iopOrden[nombre] = orden;
-                }
+                if (!window.iopGlobal[periodo]) window.iopGlobal[periodo] = {};
+                window.iopGlobal[periodo][nombre] = valor;
+                if (!window.iopOrden[nombre] && orden != null) window.iopOrden[nombre] = orden;
             }
         }
 
-        const periodosNuevos = Object.keys(nuevoIOP).filter(p => !periodosExistentes.has(p)).sort();
-
-        state.iop = nuevoIOP;
-        state.iopOrden = iopOrden;
+        const periodosNuevos = Object.keys(window.iopGlobal).filter(p => !periodosExistentes.has(p)).sort();
 
         if (!state.iopBase) {
-            const primero = Object.keys(nuevoIOP).sort()[0];
-            if (primero) state.iopBase = primero;
+            const primero = Object.keys(window.iopGlobal).sort()[0];
+            if (primero) {
+                state.iopBase = primero;
+                await save();
+            }
         }
 
-        await save();
+        await saveIOP();
         input.value = '';
 
         const msg = periodosNuevos.length > 0
             ? `IOP importado.\nPeríodos nuevos: ${periodosNuevos.map(periodoLabel).join(', ')}`
-            : 'IOP importado. No se detectaron períodos nuevos (ya estaban cargados).';
+            : 'IOP importado. No se detectaron períodos nuevos.';
         alert(msg);
 
         renderIOP();
 
     } catch (err) {
         console.error('Error al importar IOP:', err);
-        alert('Error al leer el archivo. Asegurate de que sea el Excel oficial del IOP.');
+        alert('Error al leer el archivo.');
         document.getElementById('iop-file').value = '';
     }
 }
 
-// ── Getters del IOP ───────────────────────────
-
-// Retorna el objeto { factor: valor } para un período
 function getIOPFactores(periodo) {
-    if (!state.iop || !state.iop[periodo]) return null;
-    return state.iop[periodo];
+    if (!window.iopGlobal || !window.iopGlobal[periodo]) return null;
+    return window.iopGlobal[periodo];
 }
 
-// IOP consolidado para un período:
-// Ponderado por los factores de la polinómica de los ítems si están definidos,
-// o promedio simple de todos los factores como fallback.
 function getIOPConsolidado(periodo) {
+    // Devuelve el valor ABSOLUTO del IOP ponderado para un período.
+    // NO compara con ninguna base — eso lo hace calcularEstadoGatillo().
     const factores = getIOPFactores(periodo);
     if (!factores) return null;
 
-    let pesoTotal = 0;
-    let sumaTotal = 0;
-    let tienePesos = false;
+    const pesosPorFactor = {};
+    let totalPrecio = 0;
 
     for (const item of (state.items || [])) {
         if (!item.factores || !item.factores.length) continue;
+        const precio = item.precio || 0;
+        totalPrecio += precio;
         for (const f of item.factores) {
-            const valorFactor = factores[f.nombre];
-            if (valorFactor == null) continue;
-            sumaTotal += valorFactor * f.peso;
-            pesoTotal += f.peso;
-            tienePesos = true;
+            if (!pesosPorFactor[f.nombre]) pesosPorFactor[f.nombre] = 0;
+            pesosPorFactor[f.nombre] += f.peso * precio;
         }
     }
 
-    if (tienePesos && pesoTotal > 0) {
-        return sumaTotal / pesoTotal;
+    if (!totalPrecio) {
+        // Fallback: promedio simple si no hay polinómica cargada
+        const vals = Object.values(factores).filter(v => typeof v === 'number' && !isNaN(v));
+        if (!vals.length) return null;
+        return vals.reduce((a, b) => a + b, 0) / vals.length;
     }
 
-    // Fallback: promedio simple
-    const valores = Object.values(factores).filter(v => typeof v === 'number' && !isNaN(v));
-    if (!valores.length) return null;
-    return valores.reduce((a, b) => a + b, 0) / valores.length;
+    // IOP ponderado = SUM( peso_i * IOP_i ) / totalPrecio
+    let iopPonderado = 0;
+    for (const [nombre, pesoPrecio] of Object.entries(pesosPorFactor)) {
+        const v = factores[nombre];
+        if (v == null) continue;
+        const pesoNorm = pesoPrecio / totalPrecio;
+        iopPonderado += pesoNorm * v;
+    }
+
+    return iopPonderado;
 }
 
-// getIOP es el punto de entrada usado por engine.js y adecuaciones.js
 function getIOP(periodo) {
     return getIOPConsolidado(periodo);
 }
 
-// ── Parámetros del gatillo ────────────────────
+function getIOP(periodo) {
+    return getIOPConsolidado(periodo);
+}
 
 function recalcIOP() {
     state.gatillo = parseFloat(document.getElementById('gatillo-val').value) || 10;
@@ -194,13 +165,11 @@ function recalcIOP() {
     renderIOP();
 }
 
-// ── Estado del gatillo ────────────────────────
-
 function renderIOPEstado() {
     const el = document.getElementById('iop-estado-cards');
     const gatillo = state.gatillo || 10;
 
-    const periodos = Object.keys(state.iop || {}).sort();
+    const periodos = Object.keys(window.iopGlobal || {}).sort();
     if (!periodos.length || !state.iopBase) {
         el.innerHTML = `<div class="empty" style="padding:16px">
             <div class="empty-sub">Importá el IOP y definí el período base</div>
@@ -249,8 +218,8 @@ function updateIOPStatusPill() {
     const pill = document.getElementById('iop-status-pill');
     if (!pill) return;
 
-    const periodos = Object.keys(state.iop || {}).sort();
-    if (!periodos.length || !state.iopBase) {
+    const periodos = Object.keys(window.iopGlobal || {}).sort();
+    if (!periodos.length) {
         pill.textContent = 'Sin índices IOP';
         pill.className = 'tag tag-neutral';
         return;
@@ -279,11 +248,9 @@ function updateIOPStatusPill() {
     }
 }
 
-// ── Tabla de la matriz (solo lectura) ─────────
-
 function renderIOPMatriz() {
     const table = document.getElementById('iop-matrix');
-    const periodos = Object.keys(state.iop || {}).filter(p => p !== '_orden').sort();
+    const periodos = Object.keys(window.iopGlobal || {}).filter(p => p !== '_orden').sort();
 
     if (!periodos.length) {
         table.innerHTML = `<tbody><tr><td colspan="3" style="text-align:center;padding:32px;color:var(--text-2);font-size:13px">
@@ -292,17 +259,13 @@ function renderIOPMatriz() {
         return;
     }
 
-    // Lista de factores: del primer período con datos
-    const orden = state.iopOrden || {};
-    const factores = Object.keys(orden)
-        .sort((a, b) => orden[a] - orden[b]);
-
+    const orden = window.iopOrden || {};
+    const factores = Object.keys(orden).sort((a, b) => orden[a] - orden[b]);
     if (!factores.length) { table.innerHTML = ''; return; }
 
     let html = '<thead><tr>';
     html += `<th class="sticky-header sticky-col-nro">N°</th>`;
     html += `<th class="sticky-header sticky-col-factor">Factor</th>`;
-
     periodos.forEach(p => {
         const esBase = p === state.iopBase;
         html += `<th class="sticky-header" style="${esBase ? 'background:#e8f0fe;color:var(--accent)' : ''}">`
@@ -317,7 +280,7 @@ function renderIOPMatriz() {
         html += `<td class="sticky-col-nro">${index + 1}</td>`;
         html += `<td class="sticky-col-factor">${factor}</td>`;
         periodos.forEach(p => {
-            const valor = state.iop[p] ? state.iop[p][factor] : null;
+            const valor = window.iopGlobal[p] ? window.iopGlobal[p][factor] : null;
             html += valor != null
                 ? `<td>${valor.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</td>`
                 : `<td style="color:#ccc;text-align:center">—</td>`;

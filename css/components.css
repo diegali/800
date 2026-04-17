@@ -502,7 +502,9 @@ tr:hover td {
 
 .modal {
   background: white;
-  width: 500px;
+  width: 90%;
+  max-width: 560px;
+  max-height: 90vh;
   border-radius: 8px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
   overflow: hidden;
@@ -522,6 +524,7 @@ tr:hover td {
 
 .modal-body {
   padding: 16px;
+  overflow-y: auto;
 }
 
 .modal-body table {

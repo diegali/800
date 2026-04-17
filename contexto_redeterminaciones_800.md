@@ -1,5 +1,5 @@
 # Redeterminaciones 800/16 — Decreto 1082/17 · Adecuaciones provisorias
-## Documento de contexto — App web · **Versión 4**
+## Documento de contexto — App web · **Versión 9**
 *Provincia de Córdoba*
 
 ---
@@ -9,39 +9,55 @@
 Describe el contexto, reglas de negocio y arquitectura actual de la app web de redeterminaciones para gestionar adecuaciones provisorias bajo el Decreto 800/16 de la Provincia de Córdoba.
 
 **Cómo usarlo:** al iniciar un nuevo chat, adjuntá este archivo y decile a la IA:
-> *"Leíste el documento de contexto de la app Redeterminaciones 800/16 v4. Quiero continuar el desarrollo. [Describí qué querés hacer.]*"
+> *"Leíste el documento de contexto de la app Redeterminaciones 800/16 v9. Quiero continuar el desarrollo. [Describí qué querés hacer.]"*
 
-**Nota de trabajo:** el usuario es principiante. No generar archivos completos para descargar. En cambio, indicar exactamente qué cambiar, en qué archivo y en qué parte, paso a paso.
+**Nota de trabajo:** el usuario es principiante. Respondé solo con código, sin explicación, listo para copiar y pegar.
 
 ---
 
 ## 2. Dominio: Decreto 800/16 y 1082/17
 
 ### 2.1 Objetivo general
-El Decreto 800/16 regula la redeterminación de precios en obras públicas provinciales de Córdoba. Permite actualizar el precio contractual cuando los costos varían por inflación u otros factores, manteniendo el equilibrio económico del contrato.
+El Decreto 800/16 regula la redeterminación de precios en obras públicas provinciales de Córdoba. Permite actualizar el precio contractual cuando los costos varían por inflación u otros factores.
 
 ### 2.2 Estructura de costos (polinómica)
-Cada ítem tiene su propia estructura de costos con factores ponderados que deben sumar 100%. Los factores tienen nombre y peso (%). El nombre del factor debe coincidir exactamente con el nombre de la columna en el Excel del IOP.
+Cada ítem tiene su propia estructura de costos con factores ponderados que deben sumar 100%. El nombre del factor debe coincidir exactamente con el nombre de la columna en el Excel del IOP.
 
 ### 2.3 Índice IOP y gatillo
-- Se usa el Índice de Obra Pública (IOP) de Córdoba, publicación mensual oficial.
-- **Gatillo:** si la variación acumulada del IOP consolidado desde la última base supera el umbral configurado (default 10%), puede corresponder una adecuación.
-- Además del gatillo, la empresa contratista debe haber solicitado formalmente la adecuación (condición Sí/No en la app).
+- Se usa el Índice de Obra Pública (IOP) de Córdoba, publicación mensual oficial. 46 factores mensuales.
+- **Gatillo:** si la variación acumulada desde la última base supera el umbral configurado (default 10%), puede corresponder una adecuación.
+- La empresa contratista debe haber solicitado formalmente la adecuación (condición Sí/No).
 - Al registrar una adecuación que procede, ese período IOP pasa a ser la nueva base (**cambio de base dinámico**).
 
-### 2.4 Adecuaciones provisorias (Dec. 1082/17)
-Las adecuaciones provisorias se calculan mes a mes sobre el remanente pendiente de ejecutar:
+#### Cálculo correcto de la variación acumulada (polinómica ponderada por precio)
+La variación acumulada NO usa un único índice global. Se calcula con la polinómica de cada ítem, ponderada por el precio del ítem:
 
+```
+peso_factor_global = SUM(precio_item × peso_factor_en_item) / SUM(precio_item)
+variación_factor   = peso_factor_global × (índice_actual / índice_base − 1)
+variación_acumulada = SUM(variación_factor) para todos los factores
+```
+
+- `índice_base`: valor del factor en el período base (última adecuación que procede, o `state.iopBase`).
+- `índice_actual`: valor del factor en el período analizado.
+- Los pesos se normalizan dividiendo por el precio total de todos los ítems con factores.
+- Si un factor no tiene valor en base o actual, se ignora.
+- `state.iopBase` se setea manualmente en la pantalla IOP via `recalcIOP()`. Es el período base inicial de la obra. **No usar `fechaApertura` como base.**
+
+#### ⚠️ Bug conocido pendiente de resolver
+`getIOPConsolidado()` en `iop.js` ya usa la fórmula ponderada por precio (corregida en v9), pero los números de variación acumulada en la pantalla Adecuaciones aún no dan correctamente. Pendiente de diagnóstico.
+
+### 2.4 Adecuaciones provisorias (Dec. 1082/17)
 > **Remanente aplicado = MIN(remanente teórico, remanente real)**
 
 - **Remanente teórico:** calculado en base al plan de avance programado.
 - **Remanente real:** calculado en base a lo certificado efectivamente.
-- Si el remanente teórico es 0 y el real es mayor → ítem **penalizado** (atrasado).
+- Si el remanente teórico es 0 y el real es mayor → ítem **penalizado**.
 - Si la cantidad vigente del ítem es 0 (economía total) → remanente = 0.
 
 ### 2.5 Cálculo del remanente
 
-| Variable | Fórmula / Origen |
+| Variable | Fórmula |
 |---|---|
 | Cantidad vigente | Última versión del ítem con fecha <= período |
 | Acumulado plan | Suma de cantidades planificadas hasta el período |
@@ -52,253 +68,271 @@ Las adecuaciones provisorias se calculan mes a mes sobre el remanente pendiente 
 | Adecuación ítem | Precio vigente × rem_aplicado × (factor_IOP − 1) |
 
 ### 2.6 Modificaciones de obra
-Cuando hay economías o demasías, se crea una nueva versión de cantidad del ítem con fecha de inicio. Los cálculos históricos no se modifican; la nueva cantidad aplica solo desde esa fecha. Si la cantidad nueva es 0, el ítem queda anulado y su remanente es 0 para todos los períodos posteriores (evita división por cero).
+Nueva versión de cantidad del ítem con fecha de inicio. Los cálculos históricos no se modifican. Si cantidad nueva es 0, remanente = 0 para todos los períodos posteriores.
 
 ---
 
 ## 3. Arquitectura de la app
 
 ### 3.1 Stack tecnológico
-- **Estructura:** HTML + CSS + JS modulares (multi-archivo), todos cargados como scripts normales en `index.html` (no ES modules).
-- Vanilla HTML + CSS + JavaScript puro, sin frameworks.
-- **Persistencia:** Firebase Firestore (nube) como fuente de verdad.
-- **Autenticación:** Firebase Auth con Google (via popup).
-- Exportación de adecuaciones a archivo **.txt**.
-- Importación de ítems/presupuesto desde archivos **.xlsx** (via SheetJS CDN).
-- Importación del IOP desde archivo **.xlsx** oficial (via SheetJS CDN).
-- Librerías externas:
-  - `https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js`
-  - Firebase SDK v10 (módulos ES via CDN de gstatic)
-- Diseño: tipografía IBM Plex Sans + IBM Plex Mono, paleta neutra sobre blanco/crema.
+- HTML + CSS + JS modulares, cargados como scripts normales en `index.html` (no ES modules).
+- Vanilla JS sin frameworks.
+- **Persistencia:** Firebase Firestore (nube).
+- **Autenticación:** Firebase Auth con Google (popup).
+- Exportación de adecuaciones a **.txt**.
+- Importación de ítems/presupuesto desde **.xlsx** (SheetJS CDN).
+- Importación del IOP desde **.xlsx** oficial (SheetJS CDN).
+- Librerías: `https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js`, Firebase SDK v10 (gstatic).
 
 ### 3.2 Estructura de archivos
-
 ```
-index.html                          ← Entry point principal (incluye config Firebase)
+index.html
 css/
   base.css
   components.css
   screens.css
 js/
-  config.js                         ← (reservado, cargado antes de state.js)
-  state.js                          ← Estado global + multi-obra + sync Firebase
-  engine.js                         ← Motor de cálculo (helpers de remanente)
-  ui.js                             ← Navegación, modales, selector de obras
-  main.js                           ← Init + guardarObra() + listener login
+  config.js
+  state.js
+  engine.js
+  ui.js
+  main.js
   screens/
     resumen.js
-    estructura.js                   ← Ítems + importación Excel + polinómica
-    versiones.js                    ← Economías/demasías
-    plan.js                         ← Plan, avance real, guardarPlan(), guardarReal()
-    iop.js                          ← IOP: importación Excel, getIOP(), gatillo, matriz
+    estructura.js
+    versiones.js
+    plan.js
+    iop.js
     adecuaciones.js
 ```
 
-**Importante:** `auth.js` existe en el proyecto pero **no debe usarse** — tiene código duplicado y roto. Toda la autenticación está manejada en `state.js` y `main.js`.
+`auth.js` existe pero no se usa — tiene código duplicado y roto.
 
-### 3.3 Modelo de datos (state)
-
-El estado vive en el objeto `state` en memoria, sincronizado con **Firebase Firestore** bajo `usuarios/{uid}`.
-
-**Estructura Firestore:**
+### 3.3 Estructura Firestore
 ```
-usuarios/{uid}
-  listaObras: []       ← array completo de obras
-  activaId: string     ← ID de la obra activa
-  ultimaEdicion: ISO   ← timestamp
+usuarios/{uid}/obras/{obraId}   ← datos de cada obra (sin IOP)
+usuarios/{uid}/iop/cordoba      ← IOP del usuario { datos: {YYYY-MM: {factor: valor}}, ultimaEdicion }
 ```
 
-**Clave localStorage usada:**
-- `redeterminaciones_obraActiva` → ID de la obra activa (solo para referencia local)
+### 3.4 Variables globales clave
 
-**Estructura de cada obra (`obraVacia()`):**
+| Variable | Descripción |
+|---|---|
+| `window.state` | Obra activa en memoria |
+| `window.obras` | Array de todas las obras del usuario |
+| `window.iopGlobal` | Objeto `{YYYY-MM: {factor: valor}}` — IOP separado de las obras |
+| `window.iopOrden` | Objeto `{nombreFactor: nroOrden}` para ordenar la matriz |
+
+**⚠️ `state.iop` ya NO existe.** Todo el IOP vive en `window.iopGlobal`.
+
+### 3.5 Estructura de cada obra (`obraVacia()`)
 
 | Clave | Tipo | Descripción |
 |---|---|---|
 | id | Number | Timestamp (Date.now()) |
 | fechaCreacion | String | YYYY-MM |
-| obra | Objeto | nombre, expediente, fecha, fechaApertura, contratista |
+| obra | Objeto | nombre, expediente, fecha, fechaApertura, contratista, **fechaReplanteo**, **duracionDias** |
 | items[] | Array | id, nombre, unidad, cantidad, precio, factores[] |
 | versiones[] | Array | itemId, fecha (YYYY-MM), cantidad, motivo |
 | plan[] | Array | itemId, periodo (YYYY-MM), cantidad |
 | real[] | Array | itemId, periodo (YYYY-MM), cantidad |
-| iop | Objeto | { "YYYY-MM": { "NombreFactor": valor, ... }, ... } |
 | adecuaciones[] | Array | periodo, empresaPidio, procede, factor, total, detalle[], iopBase, iopActual |
-| gatillo | Number | Porcentaje de gatillo (default: 10) |
+| gatillo | Number | default 10 |
 | iopBase | String | Período YYYY-MM de la base IOP inicial |
 | nextId | Number | Autoincremental para IDs de ítems |
 
-**⚠️ Nota importante sobre `state.iop`:** es un **objeto** (no un array). La clave es el período `"YYYY-MM"` y el valor es otro objeto con los factores: `{ "Aceros": 13467.5, "Albañilería": 10448.2, ... }`. Hay 46 factores por período.
+**Nota:** `fechaReplanteo` (YYYY-MM) y `duracionDias` (Number) son campos de `state.obra` — se usan en la pantalla Plan para generar columnas de períodos reales en la plantilla Excel.
 
-**flag especial:** `state._sinGuardar = true` → obra nueva que todavía no se guardó.
-
-### 3.4 Funciones de gestión multi-obra (state.js)
+### 3.6 Funciones de state.js
 
 | Función | Qué hace |
 |---|---|
-| `obraVacia()` | Retorna objeto obra con valores por defecto |
+| `obraVacia()` | Retorna objeto obra con valores por defecto (sin iop) |
 | `getObraActivaId()` | Lee ID activo desde localStorage |
 | `setObraActivaId(id)` | Guarda ID activo en localStorage |
-| `save()` | Sincroniza `obras` completo a Firestore (async) |
+| `save()` | Guarda `window.state` en `usuarios/{uid}/obras/{obraId}` |
+| `saveIOP()` | Guarda `window.iopGlobal` en `usuarios/{uid}/iop/cordoba` |
 | `crearNuevaObra(datosObra)` | Crea obra, la activa, sincroniza y refresca UI |
-| `cambiarObraActiva(id)` | Cambia `state` y `activaId`; retorna true/false |
-| `eliminarObra(id)` | Elimina obra del array, sincroniza y recarga página |
-| `descargarTodoDeNube()` | Descarga `listaObras` de Firestore y refresca UI completa |
+| `cambiarObraActiva(id)` | Cambia `state` y `window.state`; retorna true/false |
+| `eliminarObra(id)` | Borra doc Firestore, filtra array, recarga página |
+| `descargarTodoDeNube()` | Carga obras (subcolección) + IOP global; hidrata `window.obras`, `window.state`, `window.iopGlobal` |
 
-**Listener de auth:** en `state.js`, `window.addEventListener('load')` registra `onAuthStateChanged`. Si hay usuario → llama `descargarTodoDeNube()`. Si no → resetea state.
-
-**En `main.js`:** `DOMContentLoaded` solo maneja el click del botón de login (signInWithPopup). El listener de auth lo maneja únicamente `state.js`.
-
-### 3.5 Motor de cálculo (engine.js)
-
-**Estas funciones viven en `engine.js` y NO deben duplicarse en otros archivos:**
+### 3.7 Funciones de engine.js
 
 | Función | Qué hace |
 |---|---|
-| `cantidadVigente(itemId, periodo)` | Última versión del ítem con fecha <= periodo |
-| `acumPlan(itemId, hasta)` | Suma cantidades del plan hasta el período |
+| `cantidadVigente(itemId, periodo)` | Última versión del ítem con fecha <= período |
+| `acumPlan(itemId, hasta)` | Suma cantidades planificadas hasta el período |
 | `acumReal(itemId, hasta)` | Suma cantidades reales hasta el período |
 | `remanente(itemId, periodo)` | Retorna {teorico, real, aplicado, nota} |
-| `calcIopBase(periodo)` | Base IOP activa: última adecuación que procede antes del período, o iopBase inicial |
-| `variacionIOP(periodo)` | Variación acumulada del IOP respecto a la base |
+| `calcIopBase(periodo)` | Base IOP activa para el período (última adec. que procede antes del período, o `state.iopBase`) |
 | `fmt$(n)` | Formatea número como moneda AR |
 | `fmtPct(n)` | Formatea número como porcentaje |
-| `periodoLabel(p)` | Convierte YYYY-MM a "Mes YYYY" |
+| `periodoLabel(p)` | Convierte YYYY-MM a "Mes YYYY". Soporta prefijo "MES-N" para períodos sin fecha real |
 
-**Estas funciones viven en `iop.js` y NO deben duplicarse en `engine.js`:**
+**⚠️ `variacionIOP(periodo)` aparece documentada en v5 pero NO está implementada en ningún archivo.** Usar `getIOP` y `calcIopBase` directamente.
 
-| Función | Qué hace |
-|---|---|
-| `getIOP(periodo)` | IOP consolidado para un período (llama a getIOPConsolidado) |
-| `getIOPConsolidado(periodo)` | Ponderado por polinómica de ítems; fallback a promedio simple |
-| `getIOPFactores(periodo)` | Retorna el objeto `{factor: valor}` crudo para un período |
-
-**Valores del campo `nota` en remanente:**
-
-| Valor | Significado |
-|---|---|
-| economia | Cantidad vigente = 0. Remanente forzado a 0. |
-| penalizado | Rem. teórico = 0 y rem. real > 0. Ítem atrasado. |
-| real-menor | Se aplica rem. real (es menor al teórico). |
-| teorico-menor | Se aplica rem. teórico (es menor al real). |
-| ok | Normal, sin condición especial. |
-
-### 3.6 UI (ui.js)
+**Estas funciones viven en `iop.js` y NO deben duplicarse:**
 
 | Función | Qué hace |
 |---|---|
-| `navigate(screen)` | Cambia pantalla activa, actualiza topbar con nombre de obra, dispara render |
+| `getIOP(periodo)` | Llama a getIOPConsolidado |
+| `getIOPConsolidado(periodo)` | Variación acumulada ponderada por precio de ítem: `SUM(precio_item × peso_factor) / SUM(precio_item)`. Sin fallback promedio simple |
+| `getIOPFactores(periodo)` | Retorna `window.iopGlobal[periodo]` |
+
+### 3.8 UI (ui.js)
+
+| Función | Qué hace |
+|---|---|
+| `navigate(screen)` | Cambia pantalla activa, actualiza topbar, dispara render |
 | `renderScreen(screen)` | Llama al render de la pantalla correspondiente |
 | `populateItemSelects()` | Actualiza todos los `<select>` de ítems |
 | `openModal(id)` / `closeModal(id)` | Abre/cierra modales |
-| `renderSelectorObras()` | Renderiza lista de obras como botones en `#sidebar-obras` (div, no select) |
+| `renderSelectorObras()` | Renderiza lista de obras en `#sidebar-obras` (div con botones) |
 | `seleccionarObra(id)` | Llama `cambiarObraActiva()`, refresca topbar y navega a resumen |
 | `verEstructura(id)` | Abre modal de factores para el ítem dado |
 | `cerrarYGuardarFactores()` | Valida suma = 100%, guarda factores en el ítem y sincroniza |
-| `validarSumaTotal()` | Feedback visual en tiempo real de la suma de factores |
 
 ---
 
-## 4. Pantalla IOP (iop.js) — detalle
+## 4. Pantalla IOP (iop.js)
 
-### 4.1 Flujo de importación
-- El usuario importa el Excel oficial del IOP Córdoba (hoja `IOP-Cba`).
-- El Excel tiene: fila 6 = header (col A=Orden, col B=Factor, col C..=fechas como seriales Excel), filas 7..52 = 46 factores con valores desde Nov-2015 en adelante.
-- Cada mes el usuario descarga el Excel actualizado con una columna nueva y lo reimporta.
-- La importación hace **merge**: agrega períodos nuevos sin borrar los anteriores.
-- No hay carga manual de IOP — solo importación desde Excel.
-
-### 4.2 Cálculo del IOP consolidado
-`getIOPConsolidado(periodo)` calcula el IOP de un período como promedio ponderado de los factores según los pesos de la polinómica de los ítems. Si no hay ítems con factores definidos, hace promedio simple de todos los factores como fallback.
-
-### 4.3 Pantalla
-- Tabla de matriz (solo lectura): filas = factores, columnas = períodos. La columna base se resalta.
-- Panel derecho: parámetros del gatillo (% y período base como select dinámico) + estado del gatillo (3 cards: base activa, último período, variación acumulada).
-- Pill en el topbar: muestra el estado del IOP en todo momento.
+- Importación desde Excel oficial: busca fila con encabezado `orden / factor` (no fila hardcodeada 6).
+- Merge: agrega períodos nuevos sin borrar anteriores.
+- Lee y escribe en `window.iopGlobal` y `window.iopOrden`.
+- Llama a `saveIOP()` al importar (no `save()`).
+- Tabla matriz solo lectura: filas = factores, columnas = períodos. Columna base resaltada.
+- Panel derecho: parámetros del gatillo + estado (3 cards): base activa, último período cargado, variación acumulada.
+- Pill en topbar: estado del IOP.
+- `recalcIOP()`: guarda `state.gatillo` y `state.iopBase` (período YYYY-MM seleccionado en `#gatillo-base`), llama `save()` y `renderIOP()`.
+- `updateIOPStatusPill()`: muestra estado en topbar. Si no hay períodos, muestra "Sin índices IOP". Calcula variación acumulada usando `calcIopBase()` y `getIOP()`.
+- `calcIopBase(periodo)` en `engine.js`: retorna la última adecuación que procede antes del período, o `state.iopBase`. **No usa `fechaApertura`.**
 
 ---
 
-## 5. Otras pantallas
+## 5. Pantallas Plan de avance y Avance real (plan.js)
+
+### Pantallas separadas en el menú
+- `screen-plan` → "Plan de avance" — `navigate('plan')` → `renderPlanScreen()`
+- `screen-real` → "Avance real" — `navigate('real')` → `renderRealScreen()`
+
+### Funciones implementadas
+
+| Función | Qué hace |
+|---|---|
+| `renderPlanScreen()` | Llama a `populateItemSelects`, `renderPlanTable`, `renderRemCards` |
+| `renderPlanTable()` | Tabla compacta ítems × períodos. Solo plan (sin real). Períodos de `state.plan`. Columna "%" coloreada |
+| `renderRemCards()` | 4 cards: cantidad vigente, rem. teórico, rem. real, rem. aplicado |
+| `guardarPlan()` | Guarda período de plan desde modal. Convierte `MES-N` → `YYYY-MM` si hay `fechaReplanteo` |
+| `descargarPlantilla()` | Excel plan con períodos reales desde `fechaReplanteo` + `duracionDias` |
+| `cargarPlanExcel(event)` | Lee `#plan-file` |
+| `procesarPlanExcel(data)` | Limpia plan previo de ítems importados, luego agrega. Convierte headers a `YYYY-MM` usando `fechaReplanteo` si no son fecha |
+| `renderRealScreen()` | Llama a `renderRealTable()` |
+| `renderRealTable()` | Tabla editable inline. Valores con 4 decimales. Celdas `<input>` con `onchange="guardarRealInline(this)"`. Períodos de `state.real`. Columna "%" coloreada |
+| `guardarRealInline(input)` | Guarda/elimina registro en `state.real` desde edición inline. Llama `save()` y `renderRealTable()` |
+| `descargarPlantillaReal()` | Excel avance real con "Total real" y "% ejecutado", hoja "Avance Real" |
+| `cargarRealExcel(event)` | Lee `#real-file` |
+| `procesarRealExcel(data)` | Análogo a `procesarPlanExcel` pero en `state.real`. Busca columna `Total real`. Limpia real previo antes de agregar |
+
+### Reglas de conversión de períodos
+- Siempre `YYYY-MM` cuando hay `fechaReplanteo`.
+- `MES-N` solo como fallback sin `fechaReplanteo`.
+- Al agregar `fechaReplanteo` en `guardarEdicionObra()`, los `MES-N` en `state.plan` y `state.real` se remapean automáticamente.
+
+### Botones del toolbar — Plan (`screen-plan`)
+- `↓ Descargar plantilla` → `descargarPlantilla()`
+- `↑ Importar plan Excel` → `#plan-file` → `cargarPlanExcel(event)`
+- `+ Cargar período manual` → `openModal('modal-cargar-plan')`
+
+### Botones del toolbar — Avance real (`screen-real`)
+- `↓ Descargar plantilla` → `descargarPlantillaReal()`
+- `↑ Importar real Excel` → `#real-file` → `cargarRealExcel(event)`
+- `+ Cargar período manual` → `openModal('modal-cargar-avance')`
+
+### Modales
+- `#modal-cargar-plan`: campos `#plan-item-modal`, `#plan-periodo-modal`, `#plan-cantidad-modal`
+- `#modal-cargar-avance`: campos `#real-item-modal`, `#real-periodo-modal`, `#real-cantidad-modal`
+
+### ⚠️ Pendiente en esta pantalla
+- Edición inline de celdas del plan
+
+---
+
+## 6. Otras pantallas
 
 | Pantalla | Funcionalidad |
 |---|---|
-| Resumen | Métricas globales (contrato original, monto vigente, total adecuado, avance real), historial de adecuaciones, avance por ítem con barra de progreso. |
-| Ítems y estructura | Visualización de ítems con total oferta calculado dinámicamente. Importación desde Excel (dos formatos). Gestión de polinómica por ítem via modal con validación en tiempo real. |
-| Modificaciones | Registro de economías/demasías con fecha. Versiones del plan de avance. |
-| Plan y avance | Carga del plan en cantidades (`guardarPlan()`). Carga de avance real (`guardarReal()`). Cálculo de remanentes por ítem y período. |
-| Adecuaciones | Control de condiciones (gatillo + pedido empresa). Cálculo detallado por ítem. Exportación a TXT. |
+| Resumen | Métricas globales. Usa `window.iopGlobal` para calcular último período (no `state.iop`). Muestra contrato original, monto vigente, total adecuado, barras de avance por ítem. Botón "Editar obra" llama `abrirEditarObra()`. |
+| Ítems y estructura | Visualización de ítems. Importación Excel (2 formatos). Gestión de polinómica por ítem. Funciones: `descargarPlantillaPresupuesto()`, `descargarPlantillaEstructura()` (nombres distintos a `descargarPlantilla` de plan.js). |
+| Modificaciones | Economías/demasías con fecha. |
+| Adecuaciones | Control de condiciones. Cálculo por ítem. Exportación TXT. |
 
 ---
 
-## 6. Principios de diseño a mantener
+## 7. Principios de diseño
 
-- Estructura multi-archivo. No mezclar responsabilidades entre archivos.
-- Todo el estado en el objeto `state`; sincronizado con Firestore via `save()` (async).
-- El motor de cálculo **nunca modifica datos históricos**, solo lee y computa.
-- Siempre trabajar en **cantidades**; los porcentajes son solo para mostrar.
-- Ante economía (cantidad vigente = 0): remanente = 0, sin división por cero.
-- El cambio de base IOP es automático al guardar una adecuación que procede.
-- Sin frameworks JS. CDN permitidos: Google Fonts, SheetJS, Firebase SDK v10.
-- Un solo `onAuthStateChanged` en `state.js`. No duplicar en otros archivos.
-- **No duplicar funciones entre archivos.** Si una función ya existe en un archivo, no recrearla en otro.
+- Multi-archivo. No mezclar responsabilidades.
+- Todo el estado en `window.state`; sincronizado con Firestore via `save()`.
+- El IOP en `window.iopGlobal`; sincronizado via `saveIOP()`.
+- Motor de cálculo nunca modifica datos históricos.
+- Siempre trabajar en cantidades; porcentajes solo para mostrar.
+- Economía (cantidad = 0): remanente = 0, sin división por cero.
+- Cambio de base IOP automático al guardar adecuación que procede.
+- Sin frameworks. CDN: Google Fonts, SheetJS, Firebase SDK v10.
+- Un solo `onAuthStateChanged` en `state.js`.
+- No duplicar funciones entre archivos.
 
 ---
 
-## 7. Estado del roadmap
+## 8. Estado del roadmap
 
 ### ✅ Completado
-- Soporte para múltiples obras (selector en sidebar como lista de botones).
+- Múltiples obras (selector en sidebar).
 - Importación de ítems desde Excel (dos formatos).
-- Autenticación con Google via Firebase Auth.
-- Persistencia en Firebase Firestore (reemplaza localStorage).
-- Total oferta calculado dinámicamente en pantalla de estructura.
+- Autenticación Google via Firebase Auth.
+- Persistencia en Firestore: cada obra en su propio documento.
+- IOP separado de las obras, compartido entre obras del mismo usuario.
+- `guardarObra()` en `main.js` siempre crea obra nueva (no pisa la activa).
+- `window.obras`, `window.state`, `window.iopGlobal` como variables globales sincronizadas.
+- Total oferta calculado dinámicamente.
 - Gestión de polinómica por ítem con validación suma = 100%.
-- `guardarPlan()` y `guardarReal()` en `plan.js`.
-- `cambiarObraActiva()` en `state.js`.
-- `renderSelectorObras()` apunta a `#sidebar-obras` (div con botones).
-- Eliminado listener duplicado de auth en `main.js`.
-- Modal `modal-nueva-obra` corregido.
-- **Pantalla IOP reescrita (v4):**
-  - Parser del Excel corregido (detecta header por contenido, lee seriales de fecha con SSF).
-  - `state.iop` es objeto `{periodo: {factor: valor}}`, no array.
-  - IOP consolidado ponderado por polinómica de ítems.
-  - Tabla de matriz solo lectura con columna base resaltada.
-  - Select dinámico de período base.
-  - Importación hace merge (no reemplaza todo).
-  - Eliminadas funciones `guardarIOP()`, `eliminarIOP()`, `getIOPPromedio()`.
-  - `getIOP()`, `getIOPConsolidado()`, `getIOPFactores()` viven en `iop.js`.
-  - `getIOP()`, `calcIopBase()`, `variacionIOP()` eliminadas de `engine.js` (estaban duplicadas).
-  - `adecuaciones.js` corregido: usa `Object.keys(state.iop)` en lugar de `state.iop.map(...)`.
+- Pantalla IOP: parser Excel, IOP consolidado ponderado por precio de ítem, matriz solo lectura, select dinámico de base, merge en importación.
+- Campos `fechaReplanteo` y `duracionDias` en `state.obra` (formularios crear/editar obra).
+- Pantallas separadas: Plan de avance (`screen-plan`) y Avance real (`screen-real`).
+- Plan: tabla compacta solo-plan, descarga plantilla Excel, importación Excel, carga manual por modal, cards de remanente.
+- Avance real: tabla editable inline con 4 decimales, descarga plantilla Excel, importación Excel, carga manual por modal.
+- Remapeo automático `MES-N` → `YYYY-MM` al agregar `fechaReplanteo` en `guardarEdicionObra()`.
+- `calcIopBase()` usa `state.iopBase` como fallback (no `fechaApertura`).
+- `getIOPConsolidado()` pondera factores por precio de ítem (no promedio simple).
 
 ### ⏳ Pendiente
-- CSS: corregir posicionamiento de modales (`position: fixed`, `z-index: 9999`) para evitar que aparezcan alineados a la izquierda al pie de página.
-- Eliminar o ignorar `auth.js` (tiene código duplicado y roto — no se referencia desde ningún lado idealmente).
-- Exportar adecuación a Excel (.xlsx) con formato de tabla.
+- CSS: corregir posicionamiento de modales (`position: fixed`, `z-index: 9999`).
+- Exportar adecuación a Excel (.xlsx).
 - Importar/exportar backup completo en JSON.
-- Edición inline de ítems y plan (sin modal).
-- Vincular factores de polinómica con cálculo de adecuación por ítem (actualmente `guardarAdecuacion()` usa un único `factor = iopActual / iopBase` para todos los ítems — debería calcular el factor ponderado por la polinómica de cada ítem individualmente).
-- Comparación automática contra sistema externo.
+- Edición inline de celdas del plan.
+- Vincular polinómica de cada ítem con el cálculo de adecuación (hoy usa polinómica global).
+- **Bug:** variación acumulada en pantalla Adecuaciones no da valores correctos — pendiente de diagnóstico.
 - Informe PDF de la adecuación.
 - Modo auditoría.
-- Soporte para redeterminación definitiva.
+- Soporte redeterminación definitiva.
 - Validación visual de que el plan sume 100% por ítem.
 
 ---
 
-## 8. Glosario
+## 9. Glosario
 
 | Término | Definición |
 |---|---|
 | Redeterminación | Ajuste del precio contractual por variación de costos (definitivo). |
 | Adecuación provisoria | Ajuste mensual parcial a cuenta de la redeterminación definitiva. |
-| IOP | Índice de Obra Pública de Córdoba, publicado mensualmente. Tiene 46 factores (Aceros, Albañilería, Asfaltos, etc.). |
+| IOP | Índice de Obra Pública de Córdoba, 46 factores mensuales. |
 | Gatillo | Variación mínima del IOP consolidado para habilitar adecuación (default 10%). |
 | Cambio de base | Al aprobar una adecuación, el IOP de ese período pasa a ser la nueva base. |
-| Polinómica | Estructura de costos de un ítem: factores ponderados que suman 100%. El nombre del factor debe coincidir con el Excel del IOP. |
-| Versión de ítem | Nueva cantidad vigente desde una fecha. Se crea al registrar economía o demasía. |
-| Economía | Reducción de cantidad de un ítem por modificación de obra. |
-| Demasía | Aumento de cantidad de un ítem por modificación de obra. |
+| Polinómica | Estructura de costos de un ítem: factores ponderados que suman 100%. |
+| Versión de ítem | Nueva cantidad vigente desde una fecha (economía o demasía). |
 | Rem. teórico | Fracción pendiente según el plan programado. |
 | Rem. real | Fracción pendiente según lo efectivamente ejecutado. |
 | Rem. aplicado | MIN(teórico, real). El que se usa para calcular la adecuación. |
 | Penalización | Rem. teórico = 0 y real > 0: ítem atrasado, no se reconoce para adecuación. |
+| fechaReplanteo | Período YYYY-MM de inicio real de la obra. Base para generar columnas de plan. |
+| duracionDias | Duración contractual en días. Se convierte a meses con `Math.ceil(dias/30)`. |

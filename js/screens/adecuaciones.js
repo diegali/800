@@ -1,7 +1,105 @@
 // ═══════════════════════════════════════════════
 // ADECUACIONES
 // ═══════════════════════════════════════════════
+function calcularEstadoGatillo() {
+    // Implementa el algoritmo correcto de tramos con cambio de base
+    const gatilloPct = (state.gatillo || 10) / 100;
+    const apertura = state.obra && state.obra.fechaApertura;
+    let periodos = Object.keys(window.iopGlobal || {}).sort();
+    if (apertura) periodos = periodos.filter(p => p >= apertura);
+    if (!periodos.length || !state.iopBase) return [];
+
+    // Buscar el período inmediatamente anterior al primero como base inicial
+    const todosLosPeriodos = Object.keys(window.iopGlobal || {}).sort();
+    const idxPrimero = todosLosPeriodos.indexOf(periodos[0]);
+    // Base inicial = período anterior a fechaApertura en los datos IOP disponibles
+    // Si no hay anterior, usa el primero disponible
+    const basePeriodo = idxPrimero > 0 ? todosLosPeriodos[idxPrimero - 1] : todosLosPeriodos[0];
+    let baseIndex = getIOP(basePeriodo);
+    let baseActual = basePeriodo;
+
+    const resultados = [];
+
+    for (let i = 0; i < periodos.length; i++) {
+        const p = periodos[i];
+        const iopActual = getIOP(p);
+
+        if (iopActual == null || baseIndex == null) {
+            resultados.push({ periodo: p, variacion: null, supera: false, basePeriodo });
+            continue;
+        }
+
+        // Regla 1: variación = IOP actual / IOP base - 1 (no se acumula multiplicando)
+        const variacion = iopActual / baseIndex - 1;
+        const supera = variacion > gatilloPct;
+
+        resultados.push({ periodo: p, variacion, supera, basePeriodo: baseActual });
+
+        // Regla 3: si supera el gatillo → nueva base = período ANTERIOR
+        if (supera && i > 0) {
+            const periodoAnterior = periodos[i - 1];
+            const iopAnterior = getIOP(periodoAnterior);
+            if (iopAnterior != null) {
+                baseIndex = iopAnterior;
+                baseActual = periodoAnterior;
+            }
+        }
+    }
+
+    return resultados;
+}
+
+function renderGatillo() {
+    const container = document.getElementById('adec-gatillo-container');
+    const empty = document.getElementById('adec-gatillo-empty');
+    const apertura = state.obra && state.obra.fechaApertura;
+
+    const resultados = calcularEstadoGatillo();
+
+    if (!resultados.length || !apertura) {
+        container.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+
+    let thead = '<tr><th style="min-width:130px"></th>';
+    let trBase = '<tr><td style="font-size:11px;color:var(--text2);font-weight:500">Base activa</td>';
+    let trVar = '<tr><td style="font-size:11px;color:var(--text2);font-weight:500">Var. acumulada</td>';
+    let trTag = '<tr><td style="font-size:11px;color:var(--text2);font-weight:500">Estado</td>';
+
+    resultados.forEach(r => {
+        const yaCalculada = state.adecuaciones.some(a => a.periodo === r.periodo);
+
+        thead += `<th style="min-width:90px;text-align:center">${periodoLabel(r.periodo)}</th>`;
+
+        trBase += `<td style="text-align:center;font-size:11px;color:var(--text2)">${periodoLabel(r.basePeriodo)}</td>`;
+
+        const varTxt = r.variacion !== null
+            ? `<span style="font-weight:600;color:${r.supera ? 'var(--ok)' : 'var(--text)'}">${r.variacion >= 0 ? '+' : ''}${(r.variacion * 100).toFixed(2)}%</span>`
+            : '<span style="color:var(--text2)">—</span>';
+
+        const estadoTag = yaCalculada
+            ? `<span class="tag tag-ok" style="font-size:10px">Calculada</span>`
+            : r.supera
+                ? `<span class="tag tag-ok" style="font-size:10px">✓ Gatillo</span>`
+                : `<span class="tag tag-no" style="font-size:10px">No supera</span>`;
+
+        trVar += `<td style="text-align:center">${varTxt}</td>`;
+        trTag += `<td style="text-align:center">${estadoTag}</td>`;
+    });
+
+    thead += '</tr>';
+    trBase += '</tr>';
+    trVar += '</tr>';
+    trTag += '</tr>';
+
+    container.innerHTML = `<div style="overflow-x:auto"><table style="min-width:100%"><thead>${thead}</thead><tbody>${trBase}${trVar}${trTag}</tbody></table></div>`;
+}
+
 function renderAdecuaciones() {
+    renderGatillo();
+
     const tbody = document.getElementById('adec-control-tbody');
     const empty = document.getElementById('adec-empty');
 
@@ -31,7 +129,6 @@ function renderAdecuaciones() {
     </tr>`;
     }).join('');
 
-    // Show last adecuacion detail
     if (sorted.length) mostrarDetalle(sorted.length - 1);
 }
 
@@ -77,7 +174,7 @@ function mostrarDetalle(idx) {
 function calcularAdecuacion() {
     // Populate periodo select with IOP periods not yet in adecuaciones
     const usados = state.adecuaciones.map(a => a.periodo);
-    const disponibles = Object.keys(state.iop || {}).filter(p => !usados.includes(p)).sort();
+    const disponibles = Object.keys(window.iopGlobal || {}).filter(p => !usados.includes(p)).sort();
     const sel = document.getElementById('adec-periodo-select');
     sel.innerHTML = disponibles.map(p => `<option value="${p}">${periodoLabel(p)}</option>`).join('');
     if (!disponibles.length) return alert('No hay períodos IOP disponibles para calcular');
@@ -95,7 +192,7 @@ function updateAdecModalInfo() {
     const vActual = getIOP(periodo);
     const varAcum = vBase && vActual ? (vActual / vBase - 1) * 100 : null;
     const gatillo = state.gatillo || 10;
-    const supera = varAcum !== null && varAcum >= gatillo;
+    const supera = varAcum !== null && superaGatillo;
     document.getElementById('adec-modal-iop-info').innerHTML = `
     <div class="alert ${supera ? 'alert-ok' : 'alert-warn'}">
       ${varAcum !== null ? `Variación IOP acumulada: <strong>${varAcum >= 0 ? '+' : ''}${varAcum.toFixed(2)}%</strong> — Gatillo ${gatillo}% — ${supera ? '✓ Supera el gatillo' : '✗ No supera el gatillo'}` : 'Sin datos IOP para este período'}
@@ -107,14 +204,19 @@ function guardarAdecuacion() {
     const empresaPidio = document.getElementById('adec-empresa-pidio').value;
     if (!periodo) return;
 
-    const base = calcIopBase(periodo);
-    const vBase = base ? getIOP(base) : null;
-    const vActual = getIOP(periodo);
-    const varAcum = vBase && vActual ? (vActual / vBase - 1) : 0;
+    // Buscar el resultado del gatillo para este período
+    const estadoGatillo = calcularEstadoGatillo();
+    const resultadoPeriodo = estadoGatillo.find(r => r.periodo === periodo);
+    const varAcum = resultadoPeriodo ? resultadoPeriodo.variacion : null;
+    const basePeriodo = resultadoPeriodo ? resultadoPeriodo.basePeriodo : null;
+
     const gatillo = (state.gatillo || 10) / 100;
-    const superaGatillo = varAcum >= gatillo;
+    const superaGatillo = varAcum !== null && varAcum > gatillo;
     const procede = superaGatillo && empresaPidio === 'si';
-    const factor = vBase && vActual ? vActual / vBase : 1;
+
+    const iopBaseVal = basePeriodo ? getIOP(basePeriodo) : null;
+    const iopActualVal = getIOP(periodo);
+    const factor = (iopBaseVal && iopActualVal) ? iopActualVal / iopBaseVal : 1;
 
     let total = 0;
     const detalle = state.items.map(item => {

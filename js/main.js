@@ -10,35 +10,90 @@ async function guardarObra() {
         expediente: document.getElementById('obra-expediente').value.trim(),
         fechaApertura: document.getElementById('obra-fecha-apertura').value,
         fecha: document.getElementById('obra-fecha').value,
+        fechaReplanteo: document.getElementById('obra-fecha-replanteo').value,
         contratista: document.getElementById('obra-contratista').value.trim(),
         duracionDias: Number(document.getElementById("obra-duracion-dias").value)
     };
 
-    if (state._sinGuardar) {
-        await crearNuevaObra(datosObra);
-    } else {
-        state.obra = { ...state.obra, ...datosObra };
-        await save();
-    }
-    if (typeof renderSelectorObras === 'function') renderSelectorObras();
-    if (typeof renderTopbarObra === 'function') renderTopbarObra();
-    if (typeof renderResumen === 'function') renderResumen();
-    closeModal('modal-nueva-obra');
-    renderTopbarObra();
-    renderSelectorObras();
+    await crearNuevaObra(datosObra);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
     const inputDias = document.getElementById("obra-duracion-dias");
     const outputMeses = document.getElementById("obra-duracion-meses");
-
     inputDias.addEventListener("input", function () {
         const dias = Number(this.value);
         const meses = Math.ceil(dias / 30);
-
         outputMeses.value = isNaN(meses) ? "" : `${meses} meses`;
     });
+
+    const editInputDias = document.getElementById("edit-obra-duracion-dias");
+    const editOutputMeses = document.getElementById("edit-obra-duracion-meses");
+    editInputDias.addEventListener("input", function () {
+        const dias = Number(this.value);
+        const meses = Math.ceil(dias / 30);
+        editOutputMeses.value = isNaN(meses) ? "" : `${meses} meses`;
+    });
 });
+
+function abrirEditarObra() {
+    const o = state.obra || {};
+    document.getElementById('edit-obra-nombre').value = o.nombre || '';
+    document.getElementById('edit-obra-expediente').value = o.expediente || '';
+    document.getElementById('edit-obra-contratista').value = o.contratista || '';
+    document.getElementById('edit-obra-fecha-apertura').value = o.fechaApertura || '';
+    document.getElementById('edit-obra-fecha').value = o.fecha || '';
+    document.getElementById('edit-obra-fecha-replanteo').value = o.fechaReplanteo || '';
+    document.getElementById('edit-obra-duracion-dias').value = o.duracionDias || '';
+    const meses = o.duracionDias ? Math.ceil(o.duracionDias / 30) : '';
+    document.getElementById('edit-obra-duracion-meses').value = meses ? `${meses} meses` : '';
+    openModal('modal-editar-obra');
+}
+
+async function guardarEdicionObra() {
+    const nombre = document.getElementById('edit-obra-nombre').value.trim();
+    if (!nombre) return alert('El nombre de la obra es obligatorio.');
+
+    const fechaReplanteoAnterior = state.obra.fechaReplanteo;
+
+    state.obra = {
+        ...state.obra,
+        nombre,
+        expediente: document.getElementById('edit-obra-expediente').value.trim(),
+        contratista: document.getElementById('edit-obra-contratista').value.trim(),
+        fechaApertura: document.getElementById('edit-obra-fecha-apertura').value,
+        fecha: document.getElementById('edit-obra-fecha').value,
+        fechaReplanteo: document.getElementById('edit-obra-fecha-replanteo').value,
+        duracionDias: Number(document.getElementById('edit-obra-duracion-dias').value)
+    };
+
+    const fechaReplanteoNueva = state.obra.fechaReplanteo;
+
+    if (fechaReplanteoNueva && fechaReplanteoNueva !== fechaReplanteoAnterior) {
+        const meses = Math.ceil(state.obra.duracionDias / 30);
+        const [anioBase, mesBase] = fechaReplanteoNueva.split("-").map(Number);
+        const mapaFechas = {};
+        for (let i = 0; i < meses; i++) {
+            const label = "MES-" + (i + 1);
+            const fecha = new Date(anioBase, mesBase - 1 + i, 1);
+            const yyyy = fecha.getFullYear();
+            const mm = String(fecha.getMonth() + 1).padStart(2, "0");
+            mapaFechas[label] = `${yyyy}-${mm}`;
+        }
+        state.plan = state.plan.map(function (p) {
+            return mapaFechas[p.periodo] ? { ...p, periodo: mapaFechas[p.periodo] } : p;
+        });
+        state.real = state.real.map(function (r) {
+            return mapaFechas[r.periodo] ? { ...r, periodo: mapaFechas[r.periodo] } : r;
+        });
+    }
+
+    await save();
+    closeModal('modal-editar-obra');
+    if (typeof renderTopbarObra === 'function') renderTopbarObra();
+    if (typeof renderSelectorObras === 'function') renderSelectorObras();
+    if (typeof renderResumen === 'function') renderResumen();
+}
 
 function renderTopbarObra() {
     const el = document.getElementById('topbar-sub');
