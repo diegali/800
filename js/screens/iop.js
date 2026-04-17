@@ -112,50 +112,69 @@ function getIOPFactores(periodo) {
     return window.iopGlobal[periodo];
 }
 
-function getIOPConsolidado(periodo) {
-    // Devuelve el valor ABSOLUTO del IOP ponderado para un período.
-    // NO compara con ninguna base — eso lo hace calcularEstadoGatillo().
-    const factores = getIOPFactores(periodo);
-    if (!factores) return null;
 
-    const pesosPorFactor = {};
+function getIOPConsolidado(periodo, basePeriodo) {
+    const iopActual = window.iopGlobal[periodo];
+    const iopBase = basePeriodo ? window.iopGlobal[basePeriodo] : null;
+    if (!iopActual || !iopBase) return null;
+
+    const items = state.items || [];
+
+    // 🔴 1. TOTAL OBRA (precio * cantidad)
     let totalPrecio = 0;
+    for (const item of items) {
+        totalPrecio += (Number(item.precio) || 0) * (Number(item.cantidad) || 0);
+    }
 
-    for (const item of (state.items || [])) {
-        if (!item.factores || !item.factores.length) continue;
-        const precio = item.precio || 0;
-        totalPrecio += precio;
+    if (!totalPrecio) return null;
+
+    // 🔴 2. POLINÓMICA CORRECTA (SUMAPRODUCTO como Excel)
+    const pesosPorFactor = {};
+
+    for (const item of items) {
+        const importe = (Number(item.precio) || 0) * (Number(item.cantidad) || 0);
+        if (!importe || !item.factores) continue;
+
+        const ponderadorItem = importe / totalPrecio;
+
         for (const f of item.factores) {
-            if (!pesosPorFactor[f.nombre]) pesosPorFactor[f.nombre] = 0;
-            pesosPorFactor[f.nombre] += f.peso * precio;
+            const key = f.nombre.trim().toUpperCase();
+            const peso = (Number(f.peso) || 0) / 100;
+
+            if (!pesosPorFactor[key]) pesosPorFactor[key] = 0;
+
+            // 🔴 SUMAPRODUCTO REAL
+            pesosPorFactor[key] += peso * ponderadorItem;
         }
     }
 
-    if (!totalPrecio) {
-        // Fallback: promedio simple si no hay polinómica cargada
-        const vals = Object.values(factores).filter(v => typeof v === 'number' && !isNaN(v));
-        if (!vals.length) return null;
-        return vals.reduce((a, b) => a + b, 0) / vals.length;
+    // 🔴 3. CÁLCULO VRI
+    let total = 0;
+
+    for (const [factor, peso] of Object.entries(pesosPorFactor)) {
+        const keyActual = Object.keys(iopActual).find(k =>
+            k.trim().toUpperCase() === factor
+        );
+        const keyBase = Object.keys(iopBase).find(k =>
+            k.trim().toUpperCase() === factor
+        );
+
+        if (!keyActual || !keyBase) continue;
+
+        const vActual = iopActual[keyActual];
+        const vBase = iopBase[keyBase];
+
+        if (!vActual || !vBase) continue;
+
+        total += peso * (vActual / vBase - 1);
     }
 
-    // IOP ponderado = SUM( peso_i * IOP_i ) / totalPrecio
-    let iopPonderado = 0;
-    for (const [nombre, pesoPrecio] of Object.entries(pesosPorFactor)) {
-        const v = factores[nombre];
-        if (v == null) continue;
-        const pesoNorm = pesoPrecio / totalPrecio;
-        iopPonderado += pesoNorm * v;
-    }
-
-    return iopPonderado;
+    return total;
 }
 
-function getIOP(periodo) {
-    return getIOPConsolidado(periodo);
-}
-
-function getIOP(periodo) {
-    return getIOPConsolidado(periodo);
+function getIOP(periodo, basePeriodo) {
+    if (!basePeriodo) return null;
+    return getIOPConsolidado(periodo, basePeriodo);
 }
 
 function recalcIOP() {
@@ -165,31 +184,55 @@ function recalcIOP() {
     renderIOP();
 }
 
+// 🔥 REEMPLAZAR COMPLETO: renderIOPEstado()
+
 function renderIOPEstado() {
     const el = document.getElementById('iop-estado-cards');
-    const gatillo = state.gatillo || 10;
+    const gatillo = (state.gatillo || 10) / 100;
 
     const periodos = Object.keys(window.iopGlobal || {}).sort();
-    if (!periodos.length || !state.iopBase) {
+    if (!periodos.length) {
         el.innerHTML = `<div class="empty" style="padding:16px">
-            <div class="empty-sub">Importá el IOP y definí el período base</div>
+            <div class="empty-sub">Importá el IOP</div>
         </div>`;
         updateIOPStatusPill();
         return;
     }
 
+    let basePeriodo = periodos[0]; // marzo
+    let variacion = 0;
+    let supera = false;
+
+    // 🔴 agregar el primer valor manual (marzo = 0)
+    let resultados = [{
+        periodo: periodos[0],
+        variacion: 0
+    }];
+
+    for (let i = 1; i < periodos.length; i++) {
+        const periodo = periodos[i];
+
+        // 🔴 ahora sí abril se calcula vs marzo
+        variacion = getIOPConsolidado(periodo, basePeriodo);
+
+        resultados.push({ periodo, variacion });
+
+        supera = variacion > gatillo;
+
+        if (supera) {
+            basePeriodo = periodos[i - 1];
+        }
+    }
+
     const lastPeriodo = periodos[periodos.length - 1];
-    const base = calcIopBase(lastPeriodo);
-    const vBase = base ? getIOP(base) : null;
+    const vBase = getIOP(basePeriodo);
     const vActual = getIOP(lastPeriodo);
-    const varAcum = (vBase && vActual) ? (vActual / vBase - 1) : null;
-    const supera = varAcum !== null && varAcum * 100 >= gatillo;
-    const falta = varAcum !== null ? Math.max(0, gatillo / 100 - varAcum) : null;
+    const falta = variacion !== null ? Math.max(0, gatillo - variacion) : null;
 
     el.innerHTML = `
         <div class="metric" style="margin-bottom:10px">
             <div class="metric-label">Base activa</div>
-            <div class="metric-val" style="font-size:15px">${periodoLabel(base)}</div>
+            <div class="metric-val" style="font-size:15px">${periodoLabel(basePeriodo)}</div>
             <div class="metric-sub">IOP ${vBase != null ? vBase.toLocaleString('es-AR', { maximumFractionDigits: 2 }) : '—'}</div>
         </div>
         <div class="metric" style="margin-bottom:10px">
@@ -200,13 +243,13 @@ function renderIOPEstado() {
         <div class="metric" style="background:${supera ? 'var(--ok-bg)' : 'var(--warn-bg)'}">
             <div class="metric-label" style="color:${supera ? 'var(--ok)' : 'var(--warn)'}">Variación acumulada</div>
             <div class="metric-val" style="font-size:20px;color:${supera ? 'var(--ok)' : 'var(--warn)'}">
-                ${varAcum !== null ? (varAcum >= 0 ? '+' : '') + (varAcum * 100).toFixed(2) + '%' : '—'}
+                ${variacion !== null ? (variacion >= 0 ? '+' : '') + (variacion * 100).toFixed(2) + '%' : '—'}
             </div>
             <div class="metric-sub" style="color:${supera ? 'var(--ok)' : 'var(--warn)'}">
                 ${supera
             ? '✓ Gatillo superado — procede adecuación'
             : falta !== null
-                ? 'Falta +' + (falta * 100).toFixed(2) + '% para el gatillo de ' + gatillo + '%'
+                ? 'Falta +' + (falta * 100).toFixed(2) + '% para el gatillo'
                 : ''}
             </div>
         </div>`;

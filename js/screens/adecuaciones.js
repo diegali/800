@@ -1,48 +1,55 @@
 // ═══════════════════════════════════════════════
 // ADECUACIONES
 // ═══════════════════════════════════════════════
+
 function calcularEstadoGatillo() {
-    // Implementa el algoritmo correcto de tramos con cambio de base
     const gatilloPct = (state.gatillo || 10) / 100;
     const apertura = state.obra && state.obra.fechaApertura;
+
     let periodos = Object.keys(window.iopGlobal || {}).sort();
     if (apertura) periodos = periodos.filter(p => p >= apertura);
-    if (!periodos.length || !state.iopBase) return [];
+    if (!periodos.length) return [];
 
-    // Buscar el período inmediatamente anterior al primero como base inicial
-    const todosLosPeriodos = Object.keys(window.iopGlobal || {}).sort();
-    const idxPrimero = todosLosPeriodos.indexOf(periodos[0]);
-    // Base inicial = período anterior a fechaApertura en los datos IOP disponibles
-    // Si no hay anterior, usa el primero disponible
-    const basePeriodo = idxPrimero > 0 ? todosLosPeriodos[idxPrimero - 1] : todosLosPeriodos[0];
-    let baseIndex = getIOP(basePeriodo);
-    let baseActual = basePeriodo;
+    const todos = Object.keys(window.iopGlobal || {}).sort();
+    const idxPrimero = todos.indexOf(periodos[0]);
+    let basePeriodo = idxPrimero > 0 ? todos[idxPrimero - 1] : todos[0];
 
     const resultados = [];
 
+    // 🔴 forzar primer período vacío (como Excel)
+    resultados.push({
+        periodo: periodos[0],
+        variacion: null,
+        supera: false,
+        basePeriodo: null
+    });
+
     for (let i = 0; i < periodos.length; i++) {
         const p = periodos[i];
-        const iopActual = getIOP(p);
 
-        if (iopActual == null || baseIndex == null) {
-            resultados.push({ periodo: p, variacion: null, supera: false, basePeriodo });
+        const variacion = getIOP(p, basePeriodo);
+
+        if (variacion == null) {
+            resultados.push({
+                periodo: p,
+                variacion: null,
+                supera: false,
+                basePeriodo
+            });
             continue;
         }
 
-        // Regla 1: variación = IOP actual / IOP base - 1 (no se acumula multiplicando)
-        const variacion = iopActual / baseIndex - 1;
         const supera = variacion > gatilloPct;
 
-        resultados.push({ periodo: p, variacion, supera, basePeriodo: baseActual });
+        resultados.push({
+            periodo: p,
+            variacion,
+            supera,
+            basePeriodo
+        });
 
-        // Regla 3: si supera el gatillo → nueva base = período ANTERIOR
-        if (supera && i > 0) {
-            const periodoAnterior = periodos[i - 1];
-            const iopAnterior = getIOP(periodoAnterior);
-            if (iopAnterior != null) {
-                baseIndex = iopAnterior;
-                baseActual = periodoAnterior;
-            }
+        if (supera) {
+            basePeriodo = p;
         }
     }
 
@@ -75,10 +82,9 @@ function renderGatillo() {
 
         trBase += `<td style="text-align:center;font-size:11px;color:var(--text2)">${periodoLabel(r.basePeriodo)}</td>`;
 
-        const varTxt = r.variacion !== null
-            ? `<span style="font-weight:600;color:${r.supera ? 'var(--ok)' : 'var(--text)'}">${r.variacion >= 0 ? '+' : ''}${(r.variacion * 100).toFixed(2)}%</span>`
-            : '<span style="color:var(--text2)">—</span>';
-
+        const varTxt = r.variacion == null
+            ? '<span style="color:var(--text2)">—</span>'
+            : `<span style="font-weight:600;color:${r.supera ? 'var(--ok)' : 'var(--text)'}">${(r.variacion * 100).toFixed(2)}%</span>`;
         const estadoTag = yaCalculada
             ? `<span class="tag tag-ok" style="font-size:10px">Calculada</span>`
             : r.supera
@@ -205,13 +211,17 @@ function guardarAdecuacion() {
     if (!periodo) return;
 
     // Buscar el resultado del gatillo para este período
+    // 🔥 REEMPLAZAR SOLO ESTE BLOQUE dentro de guardarAdecuacion()
+
     const estadoGatillo = calcularEstadoGatillo();
     const resultadoPeriodo = estadoGatillo.find(r => r.periodo === periodo);
+
     const varAcum = resultadoPeriodo ? resultadoPeriodo.variacion : null;
     const basePeriodo = resultadoPeriodo ? resultadoPeriodo.basePeriodo : null;
 
     const gatillo = (state.gatillo || 10) / 100;
     const superaGatillo = varAcum !== null && varAcum > gatillo;
+
     const procede = superaGatillo && empresaPidio === 'si';
 
     const iopBaseVal = basePeriodo ? getIOP(basePeriodo) : null;
@@ -246,8 +256,9 @@ function guardarAdecuacion() {
         empresaPidio,
         superaGatillo,
         procede,
-        iopBase: vBase,
-        iopActual: vActual,
+        iopBase: iopBaseVal,
+        iopActual: iopActualVal,
+        basePeriodo, // 🔥 guardar base correcta
         factor,
         total,
         detalle
