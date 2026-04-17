@@ -12,44 +12,34 @@ function calcularEstadoGatillo() {
 
     const todos = Object.keys(window.iopGlobal || {}).sort();
     const idxPrimero = todos.indexOf(periodos[0]);
-    let basePeriodo = idxPrimero > 0 ? todos[idxPrimero - 1] : todos[0];
+    let baseIndex = idxPrimero > 0 ? todos[idxPrimero - 1] : periodos[0];
 
     const resultados = [];
-
-    // 🔴 forzar primer período vacío (como Excel)
-    resultados.push({
-        periodo: periodos[0],
-        variacion: null,
-        supera: false,
-        basePeriodo: null
-    });
 
     for (let i = 0; i < periodos.length; i++) {
         const p = periodos[i];
 
-        const variacion = getIOP(p, basePeriodo);
+        // Período 0 (= apertura): vacío como en el Excel, es la base
+        if (i === 0) {
+            resultados.push({ periodo: p, variacion: null, supera: false, basePeriodo: null });
+            continue;
+        }
+
+        const periodoAnterior = periodos[i - 1];
+        const variacion = getIOP(periodoAnterior, baseIndex);
 
         if (variacion == null) {
-            resultados.push({
-                periodo: p,
-                variacion: null,
-                supera: false,
-                basePeriodo
-            });
+            resultados.push({ periodo: p, variacion: null, supera: false, basePeriodo: baseIndex });
             continue;
         }
 
         const supera = variacion > gatilloPct;
 
-        resultados.push({
-            periodo: p,
-            variacion,
-            supera,
-            basePeriodo
-        });
+        resultados.push({ periodo: p, variacion, supera, basePeriodo: baseIndex });
 
+        // Cambio de base: el período donde se detectó el gatillo pasa a ser la nueva base
         if (supera) {
-            basePeriodo = p;
+            baseIndex = periodoAnterior;
         }
     }
 
@@ -80,16 +70,19 @@ function renderGatillo() {
 
         thead += `<th style="min-width:90px;text-align:center">${periodoLabel(r.periodo)}</th>`;
 
-        trBase += `<td style="text-align:center;font-size:11px;color:var(--text2)">${periodoLabel(r.basePeriodo)}</td>`;
+        trBase += `<td style="text-align:center;font-size:11px;color:var(--text2)">${r.basePeriodo ? periodoLabel(r.basePeriodo) : '—'}</td>`;
 
-        const varTxt = r.variacion == null
-            ? '<span style="color:var(--text2)">—</span>'
-            : `<span style="font-weight:600;color:${r.supera ? 'var(--ok)' : 'var(--text)'}">${(r.variacion * 100).toFixed(2)}%</span>`;
+        const varTxt = r.variacion !== null
+            ? `<span style="font-weight:600;color:${r.supera ? 'var(--ok)' : 'var(--text)'}">${r.variacion >= 0 ? '+' : ''}${(r.variacion * 100).toFixed(2)}%</span>`
+            : '<span style="color:var(--text2)">—</span>';
+
         const estadoTag = yaCalculada
             ? `<span class="tag tag-ok" style="font-size:10px">Calculada</span>`
             : r.supera
                 ? `<span class="tag tag-ok" style="font-size:10px">✓ Gatillo</span>`
-                : `<span class="tag tag-no" style="font-size:10px">No supera</span>`;
+                : r.variacion !== null
+                    ? `<span class="tag tag-no" style="font-size:10px">No supera</span>`
+                    : '<span style="color:var(--text2);font-size:11px">—</span>';
 
         trVar += `<td style="text-align:center">${varTxt}</td>`;
         trTag += `<td style="text-align:center">${estadoTag}</td>`;

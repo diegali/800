@@ -155,16 +155,22 @@ function getIOPConsolidado(periodo, basePeriodo) {
         const keyActual = Object.keys(iopActual).find(k =>
             k.trim().toUpperCase() === factor
         );
+
         const keyBase = Object.keys(iopBase).find(k =>
             k.trim().toUpperCase() === factor
         );
+
+        if (!keyActual || !keyBase) {
+            console.warn("Factor no encontrado:", factor, periodo, basePeriodo);
+            continue;
+        }
 
         if (!keyActual || !keyBase) continue;
 
         const vActual = iopActual[keyActual];
         const vBase = iopBase[keyBase];
 
-        if (!vActual || !vBase) continue;
+        if (vActual == null || vBase == null) continue;
 
         total += peso * (vActual / vBase - 1);
     }
