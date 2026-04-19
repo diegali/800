@@ -1,12 +1,12 @@
 # Redeterminaciones 800/16 — Decreto 1082/17
-## Contexto técnico — v17
+## Contexto técnico — v16
 *Provincia de Córdoba*
 
 ---
 
 ## Inicio rápido
 Al iniciar chat nuevo:
-> *"Leíste el contexto de la app Redeterminaciones 800/16 v17. Quiero continuar el desarrollo. [describí qué querés hacer]"*
+> *"Leíste el contexto de la app Redeterminaciones 800/16 v16. Quiero continuar el desarrollo. [describí qué querés hacer]"*
 
 **Modo de trabajo:** usuario principiante. Solo código listo para copiar/pegar, mínima explicación.
 
@@ -58,13 +58,12 @@ usuarios/{uid}/iop/cordoba        ← { datos: {YYYY-MM: {factor: valor}}, orden
 ## Estructura de obra (`obraVacia()`)
 ```
 id, fechaCreacion
-obra: { nombre, expediente, fecha, fechaApertura, fechaReplanteo, contratista, duracionDias,
-        anticipoPct, anticipoPeriodo }
-items[]:      { id, nombre, unidad, cantidad, precio, precioOficial, factores[] }
+obra: { nombre, expediente, fecha, fechaApertura, fechaReplanteo, contratista, duracionDias }
+items[]:      { id, nombre, unidad, cantidad, precio, factores[] }
 versiones[]:  { itemId, fecha(YYYY-MM), cantidad, motivo }
 plan[]:       { itemId, periodo(YYYY-MM), cantidad }
 real[]:       { itemId, periodo(YYYY-MM), cantidad }
-adecuaciones[]: { periodo, empresaPidio, superaGatillo, procede,
+adecuaciones[]: { periodo, empresaPidio, decreto1082, superaGatillo, procede,
                   iopBase, iopActual, basePeriodo, periodoCalculo,
                   factor, total, detalle[] }
 gatillo: 10
@@ -72,37 +71,13 @@ iopBase: YYYY-MM   ← solo para matriz IOP, NO para calcularEstadoGatillo
 nextId: 1
 ```
 
-### Anticipo financiero ✅ implementado v17
-- `state.obra.anticipoPct` — porcentaje (ej: `25` → 25%)
-- `state.obra.anticipoPeriodo` — período desde el que aplica (`YYYY-MM`)
-- Se carga en modales "Nueva obra" y "Editar obra" (`index.html`)
-- Se guarda en `guardarObra()` y `guardarEdicionObra()` en `main.js`
-- Se aplica en `guardarAdecuacion()` cuando `periodo >= anticipoPeriodo`
-
-### Fórmulas con anticipo (cuando aplica) ✅ verificado adec1
-```
-anticipo = state.obra.anticipoPct / 100
-precioRedeterminado = round(precioBase × anticipo + precioBase × factorRedondeado × (1 - anticipo), 4)
-precioProvisorio    = round(precioBase × anticipo + precioBase × (1 + varProvisoria) × (1 - anticipo), 4)
-adecuacion          = round(adecuacion × (1 - anticipo), 4)
-ajusteOC            = calculado con los precios provisorios modificados (sin cambio de fórmula)
-```
-- ⚠️ **Pendiente investigar**: diferencia pequeña (~$9.441 sobre $1.924M) en ajusteOC adec 2 para 7 ítems con `precioOficial ≠ precio`. App da `23.832,52`, Excel da `23.834,20` para "Enmarcados". Factor y anticipo coinciden. Causa aún no identificada.
-
-### `precioOficial` en ítems ✅
-- `item.precio` = precio de la oferta (base para montos, remanentes, adecuaciones)
-- `item.precioOficial` = precio del presupuesto oficial (SOLO para ponderadores de polinómica en `getIOPConsolidado`)
-- Si `precioOficial` es 0 o undefined, `getIOPConsolidado` cae a `precio`
-- Se importa desde botón "⬆ Importar oficial" en pantalla Estructura
-- Plantilla: hoja `Presupuesto`, precio en columna E (índice 4)
-
 ### detalle[] por ítem — estructura completa ✅
 ```
 {
   itemId, nombre,
   precioVigente,       ← cantidad × precioBase (precio redet de adec anterior, o precio original)
-  precioRedeterminado, ← round(precioBase × factorRedondeado, 4) [sin anticipo]
-  precioProvisorio,    ← round(precioBase × (1 + varProvisoria), 4) [sin anticipo]
+  precioRedeterminado, ← round(precioBase × factorRedondeado, 4) — usando enteros escalados
+  precioProvisorio,    ← round(precioBase × factorProvisorio, 4) — usando enteros escalados
   remTeorico, remReal, remAplicado,  ← calculados con periodoCalculo (mes anterior)
   nota, factor,
   adecuacion,          ← round(precioVigente × remAplicado × variacion, 4)
@@ -113,6 +88,16 @@ ajusteOC            = calculado con los precios provisorios modificados (sin cam
 - `total` de la adecuación = suma de `adecuacion` de todos los ítems
 - `precioProvAnterior` = `detalleAnterior.precioProvisorio` o `item.precio` si es la primera adecuación
 
+### Redondeo crítico — evitar errores de punto flotante ✅
+```javascript
+// CORRECTO — usar enteros escalados para multiplicación de precios:
+precioRedeterminado = Math.round(Math.round(precioBase * 10000) * Math.round(factorRedondeado * 10000) / 10000) / 10000;
+precioProvisorio    = Math.round(Math.round(precioBase * 10000) * Math.round(factorProvisorio * 10000) / 10000) / 10000;
+
+// INCORRECTO — causa errores de $0.0001 por punto flotante:
+precioRedeterminado = Math.round(precioBase * factorRedondeado * 10000) / 10000;
+```
+
 ---
 
 ## engine.js — funciones clave
@@ -121,7 +106,7 @@ ajusteOC            = calculado con los precios provisorios modificados (sin cam
 | `cantidadVigente(itemId, periodo)` | Última versión del ítem con fecha <= período |
 | `acumPlan(itemId, hasta)` | Suma plan hasta período |
 | `acumReal(itemId, hasta)` | Suma real hasta período |
-| `remanente(itemId, periodo)` | `{teorico, real, aplicado, nota}` |
+| `remanente(itemId, periodo)` | `{teorico, real, aplicado, nota}` — aplicado = MIN(teorico, real) |
 | `calcIopBase(periodo)` | Última adec. que procede antes del período, o `state.iopBase`. NO se usa en `calcularEstadoGatillo` |
 | `periodoLabel(p)` | `YYYY-MM` → `"Mes YYYY"`. Soporta `MES-N` |
 | `fmt$(n)` / `fmtPct(n)` | Formateo moneda AR / porcentaje |
@@ -140,26 +125,29 @@ getFactorItem(item, periodo, basePeriodo) // → factor individual del ítem (ej
 
 ### Cálculo VRI (getIOPConsolidado)
 ```
-pesos[factor] = SUMAPRODUCTO(peso_factor_item × (precioOficial × cantidad / totalOficial))
+pesos[factor] = peso del factor en el ítem, dividido 100 si >1, pisa (no suma) entre ítems
 VRI = SUM( pesos[factor] × (IOP_factor_actual / IOP_factor_base − 1) )
 ```
-- Usa `item.precioOficial` para ponderadores (precio presupuesto oficial)
-- Si `precioOficial` es 0 o undefined, cae a `item.precio`
-- Normalización de nombres de factores con `normUp()` (quita tildes, mayúsculas)
 
-### Factor por ítem (getFactorItem) ✅ corregido v16
+### Factor por ítem (getFactorItem)
 ```
 factorItem = 1 + SUM( peso_f × (IOP_f_periodoCalculo / IOP_f_base − 1) )
 ```
 - Usa `periodoCalculo` como período actual y `basePeriodo` como base
 - Cada ítem tiene su propio factor según su polinómica individual
-- **Bug corregido v16:** buscaba `factor` (número acumulador) en lugar de `key` (nombre del factor)
 
 ### Redondeo en cálculos — ✅ verificado contra Excel
-```
-factorRedondeado = round(factorItem, 4)
-variacion        = round(factorRedondeado - 1, 4)        ← redondear ANTES de multiplicar por FAP
-varProvisoria    = round(variacion × FAP, 4)              ← evita error de punto flotante
+```javascript
+factorRedondeado = Math.round(factor * 10000) / 10000
+variacion        = Math.round((factorRedondeado - 1) * 10000) / 10000  // redondear ANTES de × FAP
+
+// factorProvisorio — dos casos:
+// Caso A (4to decimal ≠ 0): usar factorRedondeado
+// Caso B (4to decimal = 0): usar factor sin redondear
+const tieneDecimal4Cero = Math.round(factor * 10000) % 10 === 0;
+const factorParaFP = (detalleAnterior && tieneDecimal4Cero) ? factor : factorRedondeado;
+factorProvisorio = Math.round((1 + (factorParaFP - 1) * FAP) * 10000) / 10000;  // con adec anterior
+factorProvisorio = 1 + Math.round(Math.round((factor - 1) * 10000) / 10000 * FAP * 10000) / 10000;  // sin adec anterior
 ```
 
 ### saveIOP / descargarTodoDeNube
@@ -173,38 +161,17 @@ varProvisoria    = round(variacion × FAP, 4)              ← evita error de pu
 
 ### recalcIOP()
 - Solo lee `gatillo-val`, llama `save()` y `renderIOP()`
-- `gatillo-base` eliminado
 
 ### renderIOPMatriz()
 - Tabla con filas alternadas, fuentes compactas, números con `font-family:var(--mono)`
 - Pill resumen (`#iop-resumen-pill`): "N factores · N períodos"
-- Sin marcado de base activa
 
 ### renderIOPEstado()
 - Muestra 3 metrics centrados: Períodos cargados · Factores cargados · Último período
-- Sin cálculo de variación (pendiente corrección de `getIOP` con dos parámetros)
 
 ### Pantalla IOP — layout
 - Barra superior: botón importar + input gatillo (a la derecha, inline)
 - Grid: tabla ancha (3fr) + columna Estado IOP (160px), igual alto con `align-items:stretch`
-
----
-
-## estructura.js — importación de ítems
-
-### `importarItemsExcel(input)` — importa oferta (formato 800)
-- Hoja: `Hoja1` o primera hoja
-- Precio en columna J (índice 9)
-- Filas de ítem: colA = número, colB = nombre, colD = unidad, colE = cantidad, colJ = precio
-- Filas de factor: colA null, colF = nombre, colG = nro, colH = peso decimal
-
-### `importarOficialExcel(input)` — importa presupuesto oficial ✅ nuevo v16
-- Hoja: `Presupuesto`, `Hoja1`, o primera hoja
-- Precio en columna E (índice 4)
-- Solo lee filas donde colB = string (nombre ítem) y colE = número (precio)
-- Mapea por posición — debe tener exactamente la misma cantidad de ítems que la obra
-- Guarda `item.precioOficial` en cada ítem y llama `save()`
-- Botón en index.html junto al botón "⬆ Importar oferta"
 
 ---
 
@@ -225,36 +192,45 @@ período i (i > 0):
 resultado[i] = { periodo, variacion, supera, basePeriodo: baseIndex, periodoCalculo }
 ```
 
-### `guardarAdecuacion()` — bloque por ítem con anticipo ✅
+### `registrarAdecuacionDirecta(periodo)` y `guardarAdecuacion()` — ✅ verificado adec 1, 2 y 3
+
 ```javascript
-const FAP = 0.95;
-let adecuacion = 0, saldoReintegro = 0, ajusteOC = 0;
-let precioRedeterminado = precioBase, precioProvisorio = precioBase;
+// Por cada ítem:
+const adecsPrevias = state.adecuaciones
+    .filter(a => a.procede && a.periodo < periodo)
+    .sort((a, b) => b.periodo.localeCompare(a.periodo));
+const adecAnterior = adecsPrevias[0];
+const detalleAnterior = adecAnterior?.detalle?.find(d => d.itemId === item.id);
+const precioBase = detalleAnterior?.precioRedeterminado ?? item.precio;
+const precioVigente = cv * precioBase;
 
-if (procede) {
-    const anticipo = (state.obra.anticipoPct || 0) / 100;
-    const aplicarAnticipo = anticipo > 0 && state.obra.anticipoPeriodo && periodo >= state.obra.anticipoPeriodo;
+const rem = remanente(item.id, periodoCalculo || periodo);
 
-    const factorRedondeado = round(factor, 4);
-    const variacion = round(factorRedondeado - 1, 4);
-    const varProvisoria = round(variacion * FAP, 4);
-
-    adecuacion = round(precioVigente * rem.aplicado * variacion, 4);
-
-    if (aplicarAnticipo) {
-        precioRedeterminado = round(precioBase * anticipo + precioBase * factorRedondeado * (1 - anticipo), 4);
-        precioProvisorio    = round(precioBase * anticipo + precioBase * (1 + varProvisoria) * (1 - anticipo), 4);
-        adecuacion          = round(adecuacion * (1 - anticipo), 4);
-    } else {
-        precioRedeterminado = round(precioBase * factorRedondeado, 4);
-        precioProvisorio    = round(precioBase * (1 + varProvisoria), 4);
+// Decreto 1082: penalizados y teorico-menor usan remReal
+if (decreto1082) {
+    if (rem.nota === 'penalizado' || rem.nota === 'teorico-menor') {
+        rem.aplicado = rem.real;
+        rem.nota = 'decreto1082';
     }
-
-    const precioProvAnterior = detalleAnterior?.precioProvisorio ?? item.precio;
-    ajusteOC = round(cv * rem.aplicado * (precioProvisorio - precioProvAnterior) + (cv - cv0) * precioProvAnterior, 4);
-    saldoReintegro = round(adecuacion - ajusteOC, 4);
 }
-total += adecuacion;
+
+const FAP = 0.95;
+const factorRedondeado = Math.round(factor * 10000) / 10000;
+const variacion = Math.round((factorRedondeado - 1) * 10000) / 10000;
+const tieneDecimal4Cero = Math.round(factor * 10000) % 10 === 0;
+const factorParaFP = (detalleAnterior && tieneDecimal4Cero) ? factor : factorRedondeado;
+const factorProvisorio = detalleAnterior
+    ? Math.round((1 + (factorParaFP - 1) * FAP) * 10000) / 10000
+    : 1 + Math.round(Math.round((factor - 1) * 10000) / 10000 * FAP * 10000) / 10000;
+
+adecuacion = Math.round(precioVigente * rem.aplicado * variacion * 10000) / 10000;
+// Usar enteros escalados para evitar error de punto flotante:
+precioRedeterminado = Math.round(Math.round(precioBase * 10000) * Math.round(factorRedondeado * 10000) / 10000) / 10000;
+precioProvisorio    = Math.round(Math.round(precioBase * 10000) * Math.round(factorProvisorio * 10000) / 10000) / 10000;
+
+const precioProvAnterior = detalleAnterior?.precioProvisorio ?? item.precio;
+ajusteOC = Math.round((cv * rem.aplicado * (precioProvisorio - precioProvAnterior) + (cv - cv) * precioProvAnterior) * 10000) / 10000;
+saldoReintegro = Math.round((adecuacion - ajusteOC) * 10000) / 10000;
 ```
 
 **Reglas clave:**
@@ -263,26 +239,31 @@ total += adecuacion;
 3. `precioProvAnterior` = `precioProvisorio` de la adecuación anterior, o `item.precio`
 4. Redondear `variacion` antes de multiplicar por FAP (evita error de punto flotante)
 5. `ajusteOC` se guarda en el detalle (no se recalcula al mostrar)
-6. `precio` de oferta siempre es la base — `precioOficial` solo afecta ponderadores IOP
+6. `precioRedeterminado` y `precioProvisorio` usan enteros escalados para multiplicación
+7. Decreto 1082 por adecuación: checkbox `decreto1082-${periodo}` en tabla gatillo y `decreto1082-modal` en modal
+
+### Decreto 1082 — comportamiento
+- Campo `decreto1082: boolean` guardado en cada adecuación en Firestore
+- Activación: checkbox en tabla gatillo (junto a select empresa pidió) y en modal nueva adecuación
+- Efecto: ítems con `nota === 'penalizado'` o `nota === 'teorico-menor'` usan `rem.aplicado = rem.real`
+- Nota del ítem cambia a `'decreto1082'` → se muestra como tag info "Dec. 1082"
 
 ### `renderGatillo()` — tabla horizontal
 - Columnas = períodos IOP desde `fechaApertura`
 - Filas (en orden): var. acumulada · base activa · estado · acción
 - Primera columna fija con `position:sticky;left:0`
 - Columnas compactas (`min-width:80px`)
-- Con gatillo sin calcular: select "¿Empresa pidió?" + botón "Calcular"
+- Con gatillo sin calcular: select empresa pidió + checkbox Dec. 1082 + botón "Calcular"
 - Con adecuación guardada: estado + botón "× Borrar"
 
 ### `renderAdecuaciones()` — tabla control
 - Columnas centradas excepto Monto (alineado derecha, título "Ajuste OC")
-- Sin botón × en cada fila (se eliminó)
-- Sin botón "Calcular nueva adecuación" en el header (se eliminó)
+- Sin botón × en cada fila
+- Sin botón "Calcular nueva adecuación" en el header
 
 ### `mostrarDetalle()` — tabla detalle por ítem
 Columnas (todas centradas): Ítem · Precio vigente · Rem. teórico · Rem. real · Rem. aplicado · Factor IOP · Monto redeterminado · Ajuste OC · Saldo reintegro · Nota
-- Monto redeterminado = `d.adecuacion`
-- Ajuste OC = `d.ajusteOC` (guardado en detalle)
-- Saldo reintegro = `d.saldoReintegro`
+- `notaMap2` incluye: `'decreto1082': ['tag-info', 'Dec. 1082']`
 
 ### Pie de `mostrarDetalle()` — dos secciones
 **Adecuación seleccionada:**
@@ -315,13 +296,13 @@ Contrato original = `state.items.reduce((s, i) => s + i.cantidad * i.precio, 0)`
 
 ### Lista adecuaciones calculadas
 - Muestra: nombre · período · Ajuste OC (no `a.total`)
-- Sin variación IOP % (eliminado)
+- Sin variación IOP %
 
 ---
 
 ## CSS — organización actual
 
-### `base.css` — paleta negro/dorado (v17)
+### `base.css` — paleta negro/dorado (v15)
 - `--bg: #FAF8F2` · `--surface: #FFFFFF` · `--surface2: #F5F2EA`
 - `--accent: #0D0D0D` · `--accent-mid: #C9A84C` · `--accent-light: #FEF3D0`
 - `--text: #0D0D0D` · `--text2: #5A5650` · `--text3: #9A9590`
@@ -367,12 +348,12 @@ Contrato original = `state.items.reduce((s, i) => s + i.cantidad * i.precio, 0)`
 ---
 
 ## ui.js
-- `updateIOPStatusPill()` — **eliminada** (pill removido de la topbar)
+- `updateIOPStatusPill()` — **eliminada**
 
 ---
 
 ## Pendiente
-- Exportar adecuación a Excel
+- Exportar adecuación a Excel (función `exportarAdecuacion()` existe pero puede necesitar actualización para decreto1082)
 - Backup JSON
 - Edición inline plan
 - `renderIOPEstado()`: agregar variación acumulada correcta (requiere `getIOP` con dos parámetros)
@@ -381,7 +362,6 @@ Contrato original = `state.items.reduce((s, i) => s + i.cantidad * i.precio, 0)`
 - Redeterminación definitiva
 - Validación plan sume 100% por ítem
 - FAP (0.95) hardcodeado — podría ser configurable por obra
-- ⚠️ Diferencia ~$9.441 en ajusteOC adec 2 — 7 ítems con `precioOficial ≠ precio` tienen `precioProvisorio` levemente distinto al Excel. Factor y anticipo coinciden. Posiblemente el Excel usa `varProvisoria` con más decimales o distinto orden de redondeo.
 
 ---
 
@@ -398,10 +378,8 @@ Contrato original = `state.items.reduce((s, i) => s + i.cantidad * i.precio, 0)`
 | `saldoReintegro` | adecuacion - ajusteOC — a reintegrar en redeterminación definitiva |
 | `precioRedeterminado` | Precio del ítem actualizado por factor de redeterminación — base para la próxima adecuación |
 | `precioProvisorio` | Precio del ítem actualizado por factor provisorio (FAP) — base para calcular ajusteOC incremental |
-| Rem. aplicado | MIN(teórico, real) — calculado con `periodoCalculo` |
-| Penalización | Rem. teórico=0 y real>0 — no reconocido para adecuación |
+| Rem. aplicado | MIN(teórico, real) — salvo decreto 1082 activo |
+| Penalización | Rem. teórico=0 y real>0 — no reconocido salvo decreto 1082 |
+| Decreto 1082 | Modificación del 800/16: ítems penalizados y teorico-menor usan remReal como aplicado |
 | fechaApertura | Inicio del cálculo del gatillo |
 | fechaReplanteo | Inicio real de obra — base para columnas de plan |
-| `precioOficial` | Precio del presupuesto oficial — solo para ponderadores de polinómica en `getIOPConsolidado` |
-| `anticipoPct` | Porcentaje de anticipo financiero (ej: 25) — almacenado en `state.obra` |
-| `anticipoPeriodo` | Período desde el que aplica el anticipo (`YYYY-MM`) — almacenado en `state.obra` |

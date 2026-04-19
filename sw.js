@@ -1,4 +1,4 @@
-const CACHE_NAME = 'redeterminaciones-v1.3';
+const CACHE_NAME = 'redeterminaciones-v1.4';
 
 const ARCHIVOS = [
     '/',

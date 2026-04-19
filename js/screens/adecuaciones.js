@@ -110,6 +110,9 @@ function renderGatillo() {
                         <option value="no">No pidió</option>
                         <option value="si">Sí pidió</option>
                     </select>
+                    <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--text2);cursor:pointer">
+                        <input type="checkbox" id="decreto1082-${r.periodo}"> Dec. 1082
+                    </label>
                     <button class="btn btn-sm btn-primary" onclick="registrarAdecuacionDirecta('${r.periodo}')" style="font-size:10px">Calcular</button>
                 </div>`;
         } else {
@@ -138,6 +141,7 @@ function renderGatillo() {
 
 function registrarAdecuacionDirecta(periodo) {
     const empresaPidio = document.getElementById(`empresa-pidio-${periodo}`).value;
+    const decreto1082 = document.getElementById(`decreto1082-${periodo}`)?.checked || false;
 
     const estadoGatillo = calcularEstadoGatillo();
     const resultado = estadoGatillo.find(r => r.periodo === periodo);
@@ -167,6 +171,12 @@ function registrarAdecuacionDirecta(periodo) {
         const precioProvAnterior = detalleAnterior?.precioProvisorio ?? item.precio;
         const precioVigente = cv * precioBase;
         const rem = remanente(item.id, periodoCalculo || periodo);
+        if (decreto1082) {
+            if (rem.nota === 'penalizado' || rem.nota === 'teorico-menor') {
+                rem.aplicado = rem.real;
+                rem.nota = 'decreto1082';
+            }
+        }
         const factorItem = (periodoCalculo && basePeriodo) ? getFactorItem(item, periodoCalculo, basePeriodo) : null;
         const factor = factorItem !== null ? factorItem : factorGlobal;
 
@@ -176,6 +186,10 @@ function registrarAdecuacionDirecta(periodo) {
         let ajusteOC = 0;
         let precioRedeterminado = precioBase;
         let precioProvisorio = precioBase;
+
+        if (item.nombre.includes('SANITARIA')) {
+            console.log('cv:', cv, 'ap:', acumPlan(item.id, periodoCalculo || periodo), 'ar:', acumReal(item.id, periodoCalculo || periodo));
+        }
 
         if (procede) {
             const anticipo = (state.obra.anticipoPct || 0) / 100;
@@ -228,6 +242,7 @@ function registrarAdecuacionDirecta(periodo) {
     state.adecuaciones.push({
         periodo,
         empresaPidio,
+        decreto1082,
         superaGatillo,
         procede,
         iopBase: iopBaseVal,
@@ -282,6 +297,14 @@ function mostrarDetalle(idx) {
     const sorted = [...state.adecuaciones].sort((a, b) => a.periodo.localeCompare(b.periodo));
     const a = sorted[idx];
     const num = idx + 1;
+    const notaMap2 = {
+        'economia': ['tag-no', 'Economía'],
+        'penalizado': ['tag-warn', 'Penalizado'],
+        'decreto1082': ['tag-info', 'Dec. 1082'],
+        'real-menor': ['tag-ok', 'Real menor'],
+        'teorico-menor': ['tag-ok', 'Teórico menor'],
+        'ok': ['tag-neutral', '—']
+    };
     document.getElementById('adec-detalle-section').style.display = 'block';
     document.getElementById('adec-detalle-titulo').textContent = `Adecuación provisoria ${num} — ${periodoLabel(a.periodo)}`;
     document.getElementById('adec-detalle-sub').textContent = a.procede ? `Factor IOP: ${a.iopActual && a.iopBase ? (a.iopActual / a.iopBase).toFixed(4) : '—'}` : 'No procede — sin cálculo';
@@ -419,6 +442,7 @@ function updateAdecModalInfo() {
 function guardarAdecuacion() {
     const periodo = document.getElementById('adec-periodo-select').value;
     const empresaPidio = document.getElementById('adec-empresa-pidio').value;
+    const decreto1082 = document.getElementById('decreto1082-modal')?.checked || false;
     if (!periodo) return;
 
     const estadoGatillo = calcularEstadoGatillo();
@@ -449,6 +473,12 @@ function guardarAdecuacion() {
         const precioProvAnterior = detalleAnterior?.precioProvisorio ?? item.precio;
         const precioVigente = cv * precioBase;
         const rem = remanente(item.id, periodoCalculo || periodo);
+        if (decreto1082) {
+            if (rem.nota === 'penalizado' || rem.nota === 'teorico-menor') {
+                rem.aplicado = rem.real;
+                rem.nota = 'decreto1082';
+            }
+        }
         const factorItem = (periodoCalculo && basePeriodo) ? getFactorItem(item, periodoCalculo, basePeriodo) : null;
         const factor = factorItem !== null ? factorItem : factorGlobal;
 
@@ -508,6 +538,7 @@ function guardarAdecuacion() {
     state.adecuaciones.push({
         periodo,
         empresaPidio,
+        decreto1082,
         superaGatillo,
         procede,
         iopBase: iopBaseVal,
