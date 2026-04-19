@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Redeterminaciones 800/16 — Córdoba</title>
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="./manifest.json">
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js');
@@ -15,9 +15,9 @@
     <link
         href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="css/base.css">
-    <link rel="stylesheet" href="css/components.css">
-    <link rel="stylesheet" href="css/screens.css">
+    <link rel="stylesheet" href="./css/base.css">
+    <link rel="stylesheet" href="./css/components.css">
+    <link rel="stylesheet" href="./css/screens.css">
 </head>
 
 <body>
@@ -141,30 +141,26 @@
                     <div id="screen-estructura" class="screen">
                         <div class="tabs">
                             <button class="tab-btn active"
-                                onclick="switchTabEstructura('tab-oferta', this)">Oferta</button>
+                                onclick="switchTabEstructura('tab-oficial', this)">Presupuesto oficial</button>
+                            <button class="tab-btn" onclick="switchTabEstructura('tab-oferta', this)">Oferta</button>
                             <button class="tab-btn" onclick="switchTabEstructura('tab-estructura', this)">Estructura de
                                 costos</button>
                         </div>
 
-                        <div id="tab-oferta" class="tab-content active">
+                        <div id="tab-oficial" class="tab-content active">
                             <div class="card">
                                 <div class="card-header">
                                     <div>
-                                        <div class="card-title">Oferta de la obra</div>
-                                        <div class="card-sub">Ítems con unidad, cantidad y precio unitario</div>
+                                        <div class="card-title">Presupuesto oficial</div>
+                                        <div class="card-sub">Ítems, unidades, cantidades y precios oficiales</div>
                                     </div>
                                     <div style="display:flex;gap:8px;align-items:center">
                                         <div style="font-size:1rem;font-weight:bold;margin-right:8px">
-                                            Total: <span id="total-oferta-items">$ 0,00</span>
+                                            Total: <span id="total-oficial-items">$ 0,00</span>
                                         </div>
-                                        <button class="btn" onclick="descargarPlantillaPresupuesto()">⬇ Plantilla
-                                            oferta</button>
+                                        <button class="btn" onclick="descargarPlantillaOficial()">⬇ Plantilla
+                                            oficial</button>
                                         <label class="btn btn-primary" style="cursor:pointer">
-                                            ⬆ Importar oferta
-                                            <input type="file" accept=".xlsx" style="display:none"
-                                                onchange="importarPresupuesto(this)">
-                                        </label>
-                                        <label class="btn" style="cursor:pointer">
                                             ⬆ Importar oficial
                                             <input type="file" accept=".xlsx" style="display:none"
                                                 onchange="importarOficialExcel(this)">
@@ -175,14 +171,56 @@
                                     <table>
                                         <thead>
                                             <tr>
-                                                <th style="max-width:220px">Ítem</th>
+                                                <th style="width:40px;text-align:center">N°</th>
+                                                <th>Ítem</th>
                                                 <th style="width:60px;text-align:center">Unidad</th>
                                                 <th style="width:80px;text-align:center">Cantidad</th>
-                                                <th style="width:100px;text-align:center">Precio unit.</th>
-                                                <th style="width:100px;text-align:center">Total</th>
-                                                <th style="width:120px;text-align:center">Estructura de costos</th>
-                                                <th style="width:30px"></th>
-                                                <th style="width:80px;text-align:center">% Inc.</th>
+                                                <th style="width:120px;text-align:right">Precio oficial</th>
+                                                <th style="width:120px;text-align:right">Total oficial</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="oficial-tbody"></tbody>
+                                    </table>
+                                </div>
+                                <div id="oficial-empty" class="empty">
+                                    <div class="empty-icon">⊞</div>
+                                    <div class="empty-title">Sin presupuesto oficial cargado</div>
+                                    <div class="empty-sub">Importá el Excel del presupuesto oficial para comenzar</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="tab-oferta" class="tab-content">
+                            <div class="card">
+                                <div class="card-header">
+                                    <div>
+                                        <div class="card-title">Oferta</div>
+                                        <div class="card-sub">Precios unitarios ofertados</div>
+                                    </div>
+                                    <div style="display:flex;gap:8px;align-items:center">
+                                        <div style="font-size:1rem;font-weight:bold;margin-right:8px">
+                                            Total: <span id="total-oferta-items">$ 0,00</span>
+                                        </div>
+                                        <button class="btn" onclick="descargarPlantillaOferta()">⬇ Plantilla
+                                            oferta</button>
+                                        <label class="btn btn-primary" style="cursor:pointer">
+                                            ⬆ Importar oferta
+                                            <input type="file" accept=".xlsx" style="display:none"
+                                                onchange="importarPresupuesto(this)">
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="tbl-wrap">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th style="width:40px;text-align:center">N°</th>
+                                                <th>Ítem</th>
+                                                <th style="width:60px;text-align:center">Unidad</th>
+                                                <th style="width:80px;text-align:center">Cantidad</th>
+                                                <th style="width:120px;text-align:right">Precio oferta</th>
+                                                <th style="width:120px;text-align:right">Total oferta</th>
+                                                <th style="width:80px;text-align:right">% Inc.</th>
                                             </tr>
                                         </thead>
                                         <tbody id="items-tbody"></tbody>
@@ -190,9 +228,8 @@
                                 </div>
                                 <div id="items-empty" class="empty" style="display:none">
                                     <div class="empty-icon">⊞</div>
-                                    <div class="empty-title">Sin ítems cargados</div>
-                                    <div class="empty-sub">Descargá la plantilla, completala y luego importá la oferta
-                                    </div>
+                                    <div class="empty-title">Sin oferta cargada</div>
+                                    <div class="empty-sub">Descargá la plantilla, completá los precios e importala</div>
                                 </div>
                             </div>
                         </div>

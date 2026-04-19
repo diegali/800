@@ -134,7 +134,6 @@ async function descargarTodoDeNube() {
             window.iopGlobal = {};
             window.iopOrden = {};
         }
-        window.iopGlobal = iopSnap.exists() ? (iopSnap.data().datos || {}) : {};
 
         // Activar obra
         const activaId = getObraActivaId();
@@ -154,6 +153,7 @@ async function descargarTodoDeNube() {
         }
 
         if (typeof renderItems === 'function') renderItems();
+        if (typeof renderOficial === 'function') renderOficial();
         if (typeof populateItemSelects === 'function') populateItemSelects();
         if (typeof renderSelectorObras === 'function') renderSelectorObras();
         if (typeof renderTopbarObra === 'function') renderTopbarObra();

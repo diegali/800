@@ -35,11 +35,40 @@ function switchTabEstructura(tabId, btn) {
     btn.classList.add('active');
 }
 
-function descargarPlantillaPresupuesto() {
-    const a = document.createElement('a');
-    a.href = 'plantilla_presupuesto.xlsx';
-    a.download = 'plantilla_presupuesto.xlsx';
-    a.click();
+function descargarPlantillaOficial() {
+    const wb = XLSX.utils.book_new();
+    const aoa = [
+        ['N°', 'Designación', 'Unidad', 'Cantidad', 'Precio unitario ($)', 'Subtotal ($)']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    // Agregar 200 filas con fórmulas
+    for (let i = 2; i <= 201; i++) {
+        ws[`A${i}`] = { f: `IF(B${i}<>"",ROW()-1,"")` };
+        ws[`F${i}`] = { f: `IF(D${i}<>"",D${i}*E${i},"")` };
+    }
+    ws['!cols'] = [{ wch: 5 }, { wch: 50 }, { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Presupuesto');
+    XLSX.writeFile(wb, 'plantilla_presupuesto_oficial.xlsx');
+}
+
+function descargarPlantillaOferta() {
+    if (!state.items.length) return alert('Primero importá el presupuesto oficial.');
+    const wb = XLSX.utils.book_new();
+    const aoa = [
+        ['N°', 'Designación', 'Unidad', 'Cantidad', 'Precio unitario ($)', 'Subtotal ($)'],
+        ...state.items.map((item, idx) => [
+            item.nro || idx + 1,
+            item.nombre,
+            item.unidad,
+            item.cantidad,
+            '',
+            { f: `IF(E${idx + 2}<>"",D${idx + 2}*E${idx + 2},"")` }
+        ])
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{ wch: 5 }, { wch: 50 }, { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Presupuesto');
+    XLSX.writeFile(wb, 'plantilla_oferta.xlsx');
 }
 
 function descargarPlantillaEstructura() {
@@ -57,39 +86,89 @@ function importarOficialExcel(input) {
         try {
             const data = new Uint8Array(e.target.result);
             const wb = XLSX.read(data, { type: 'array' });
-
-            // Buscar hoja: acepta 'Presupuesto', 'Hoja1', o la primera
             const ws = wb.Sheets['Presupuesto'] || wb.Sheets['Hoja1'] || wb.Sheets[wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-
-            const precios = [];
-            rows.forEach(r => {
-                const colB = r[1]; // nombre ítem
-                const colE = r[4]; // precio unitario
-                // Fila de ítem: col B tiene nombre, col E tiene número
-                if (typeof colB === 'string' && colB.trim() !== '' && colE !== null && !isNaN(parseFloat(colE))) {
-                    precios.push(parseFloat(colE) || 0);
+            let headerIdx = -1, colDesig = -1, colUnidad = -1, colCantidad = -1, colPrecio = -1;
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                for (let j = 0; j < row.length; j++) {
+                    const val = row[j] ? String(row[j]).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : '';
+                    if (val === 'designacion') { headerIdx = i; colDesig = j; }
+                    if (val === 'unidad') colUnidad = j;
+                    if (val === 'cantidad') colCantidad = j;
+                    const variantesPrecio = ['precio unitario', 'precio unit.', 'precio', 'p.u.', 'p.unitario', 'monto unitario', 'unitario'];
+                    if (variantesPrecio.some(v => val.includes(v))) colPrecio = j;
                 }
-            });
-
-            if (!precios.length) return alert('No se encontraron ítems en el archivo.');
-            if (precios.length !== state.items.length) {
-                return alert(`El presupuesto oficial tiene ${precios.length} ítems pero la obra tiene ${state.items.length}. Deben coincidir exactamente.`);
+                if (headerIdx === i) break;
             }
-
-            state.items.forEach((item, i) => {
-                item.precioOficial = precios[i];
-            });
-
+            if (headerIdx === -1) return alert('No se encontró la columna "Designación". Verificá la plantilla.');
+            const nuevos = [];
+            let nro = 1;
+            for (let i = headerIdx + 1; i < rows.length; i++) {
+                const row = rows[i];
+                const nombre = row[colDesig] ? String(row[colDesig]).trim() : '';
+                if (!nombre) continue;
+                const unidad = colUnidad >= 0 && row[colUnidad] ? String(row[colUnidad]).trim() : 'gl';
+                const cantidad = colCantidad >= 0 ? parseFloat(row[colCantidad]) || 0 : 0;
+                const precioOficial = colPrecio >= 0 ? limpiarNumeroExcel(row[colPrecio]) : 0;
+                nuevos.push({
+                    id: state.nextId++,
+                    nro: nro++,
+                    nombre,
+                    unidad,
+                    cantidad: Math.round(cantidad * 10000) / 10000,
+                    precio: 0,
+                    precioOficial,
+                    factores: []
+                });
+            }
+            if (!nuevos.length) return alert('No se encontraron ítems válidos.');
+            if (state.items.length > 0) {
+                if (!confirm(`Se reemplazarán los ${state.items.length} ítems actuales. ¿Continuás?`)) return;
+            }
+            const idsViejos = state.items.map(i => i.id);
+            state.versiones = state.versiones.filter(v => !idsViejos.includes(v.itemId));
+            state.plan = state.plan.filter(p => !idsViejos.includes(p.itemId));
+            state.real = state.real.filter(r => !idsViejos.includes(r.itemId));
+            state.adecuaciones = [];
+            state.items = nuevos;
             save();
+            renderOficial();
             renderItems();
-            alert(`✓ Precios oficiales importados para ${precios.length} ítems.`);
+            renderOficial();
+            actualizarCardEstructura();
+            alert(`✓ ${nuevos.length} ítems importados del presupuesto oficial.`);
         } catch (err) {
             alert('Error al leer el archivo: ' + err.message);
         }
         input.value = '';
     };
     reader.readAsArrayBuffer(file);
+}
+
+function renderOficial() {
+    const tbody = document.getElementById('oficial-tbody');
+    const empty = document.getElementById('oficial-empty');
+    if (!state.items.length) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+    const totalOficial = state.items.reduce((s, i) => s + i.cantidad * (i.precioOficial || 0), 0);
+    const totalOficialEl = document.getElementById('total-oficial-items');
+    if (totalOficialEl) totalOficialEl.textContent = fmt$(totalOficial);
+    tbody.innerHTML = state.items.map(item => {
+        const total = item.cantidad * (item.precioOficial || 0);
+        return `<tr>
+            <td style="text-align:center;color:var(--text2)">${item.nro || ''}</td>
+            <td style="font-weight:500">${item.nombre}</td>
+            <td style="text-align:center;color:var(--text2)">${item.unidad}</td>
+            <td style="text-align:center">${item.cantidad}</td>
+            <td class="num">${fmt$(item.precioOficial || 0)}</td>
+            <td class="num fw6">${fmt$(total)}</td>
+        </tr>`;
+    }).join('');
 }
 
 function importarPolinomica(input) {
@@ -143,6 +222,7 @@ function importarPolinomica(input) {
         input.value = '';
         save();
         renderItems();
+        renderOficial();
 
         let msg = `Polinómica importada: ${actualizados} ítems actualizados.`;
         if (noEncontrados.length) msg += `\n\nNo encontrados:\n${noEncontrados.join('\n')}`;
@@ -176,42 +256,26 @@ function renderItems() {
     const totalOferta = state.items.reduce((acc, item) => {
         return acc + (item.cantidad * item.precio);
     }, 0);
+    const totalOficial = state.items.reduce((acc, item) => acc + (item.cantidad * (item.precioOficial || 0)), 0);
 
     tbody.innerHTML = state.items.map(item => {
         const total = (item.cantidad || 0) * (item.precio || 0);
         acumuladoTotal += total; // Sumamos al acumulador
-        const montoItem = item.cantidad * item.precio;
-        const incidencia = totalOferta > 0 ? (montoItem / totalOferta) * 100 : 0;
+        const montoOficial = item.cantidad * (item.precioOficial || 0);
+        const incidencia = totalOficial > 0 ? (montoOficial / totalOficial) * 100 : 0;
         const tieneFactores = item.factores && item.factores.length > 0;
         const factCount = item.factores ? item.factores.length : 0;
         const factSum = Math.round(item.factores.reduce((s, f) => s + f.peso, 0) * 100) / 100;
         const factOk = factSum === 100;
 
         return `<tr>
+            <td style="text-align:center;color:var(--text2)">${item.nro || ''}</td>
             <td style="font-weight:500">${item.nombre}</td>
-            <td class="num">${item.unidad}</td>
-            <td class="num">${item.cantidad}</td>
-            <td class="num">${fmt$(item.precio)}</td> 
+            <td style="text-align:center;color:var(--text2)">${item.unidad}</td>
+            <td style="text-align:center">${item.cantidad}</td>
+            <td class="num">${fmt$(item.precio)}</td>
             <td class="num fw6">${fmt$(total)}</td>
-            <td>
-                <span style="
-                    font-size: 12px;
-                    color: ${tieneFactores ? 'green' : '#999'};
-                    font-weight: ${tieneFactores ? 'bold' : 'normal'};
-                ">
-                    ${tieneFactores ? '✔ Cargado' : 'Sin cargar'}
-                </span>
-            </td>
-            <td style="text-align: right;">
-                <button class="btn btn-sm" onclick="verEstructura(${item.id})">
-                    ${factCount} factor${factCount !== 1 ? 'es' : ''} 
-                    ${factOk ? '<span class="tag tag-ok" style="font-size:10px;padding:1px 5px">100%</span>' : '<span class="tag tag-warn" style="font-size:10px;padding:1px 5px">' + (factSum) + '%</span>'}
-                </button>
-            </td>
-            <td style="text-align: right;">
-                ${incidencia.toFixed(2)}%
-            </td>
-            <td><button class="btn btn-sm btn-danger" onclick="eliminarItem(${item.id})">Eliminar</button></td>
+            <td class="num">${incidencia.toFixed(2)}%</td>
         </tr>`;
     }).join('');
 
@@ -306,6 +370,7 @@ function guardarItem() {
     factoresTemp = [];
     document.getElementById('factores-lista').innerHTML = '';
     renderItems();
+    renderOficial();
     populateItemSelects();
 }
 function eliminarItem(id) {
@@ -314,7 +379,10 @@ function eliminarItem(id) {
     state.versiones = state.versiones.filter(v => v.itemId !== id);
     state.plan = state.plan.filter(p => p.itemId !== id);
     state.real = state.real.filter(r => r.itemId !== id);
-    save(); renderItems(); populateItemSelects();
+    save();
+    renderItems();
+    renderOficial();
+    populateItemSelects();
 }
 
 async function agregarFactorAlItem() {
@@ -499,6 +567,7 @@ function importarItemsExcel(input) {
             save();
             populateItemSelects();
             renderItems();
+            renderOficial();
 
             const conFactores = nuevos.filter(i => i.factores.length > 0).length;
             alert(`✓ ${nuevos.length} ítem${nuevos.length !== 1 ? 's' : ''} importado${nuevos.length !== 1 ? 's' : ''} correctamente.\n${conFactores} con estructura de costos definida.`);
@@ -559,78 +628,55 @@ function importarPresupuesto(input) {
         try {
             const data = new Uint8Array(e.target.result);
             const wb = XLSX.read(data, { type: 'array' });
-
-            // Buscar hoja "Presupuesto" o primera hoja
-            const wsName = wb.SheetNames.find(n =>
-                n.trim().toLowerCase() === 'presupuesto'
-            ) || wb.SheetNames[0];
+            const wsName = wb.SheetNames.find(n => n.trim().toLowerCase() === 'presupuesto') || wb.SheetNames[0];
             const ws = wb.Sheets[wsName];
             const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
 
-            // Encontrar la fila de encabezado buscando "Designación" o "Designacion"
-            let headerIdx = -1;
-            let colDesig = -1, colUnidad = -1, colCantidad = -1, colPrecio = -1;
-
+            let headerIdx = -1, colDesig = -1, colPrecio = -1;
             for (let i = 0; i < rows.length; i++) {
                 const row = rows[i];
                 for (let j = 0; j < row.length; j++) {
-                    const val = row[j] ? String(row[j]).trim().toLowerCase()
-                        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') : '';
-                    if (val === 'designacion') {
-                        headerIdx = i;
-                        colDesig = j;
-                    }
-                    if (val === 'unidad') colUnidad = j;
-                    if (val === 'cantidad') colCantidad = j;
-                    // Buscamos cualquier variante de Precio Unitario
+                    const val = row[j] ? String(row[j]).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : '';
+                    if (val === 'designacion') { headerIdx = i; colDesig = j; }
                     const variantesPrecio = ['precio unitario', 'precio unit.', 'precio', 'p.u.', 'p.unitario', 'monto unitario', 'unitario'];
-                    if (variantesPrecio.some(v => val.includes(v))) {
-                        colPrecio = j;
-                    }
+                    if (variantesPrecio.some(v => val.includes(v))) colPrecio = j;
                 }
                 if (headerIdx === i) break;
             }
 
-            if (headerIdx === -1 || colDesig === -1) {
-                return alert('No se encontró la columna "Designación" en el archivo. Verificá que uses la plantilla correcta.');
+            if (headerIdx === -1) return alert('No se encontró la columna "Designación". Verificá la plantilla.');
+            if (colPrecio === -1) return alert('No se encontró la columna de precio. Verificá la plantilla.');
+
+            function norm(s) {
+                return String(s).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             }
 
-            const nuevos = [];
+            let actualizados = 0;
+            let noEncontrados = [];
+
             for (let i = headerIdx + 1; i < rows.length; i++) {
                 const row = rows[i];
                 const nombre = row[colDesig] ? String(row[colDesig]).trim() : '';
                 if (!nombre) continue;
-                const unidad = colUnidad >= 0 && row[colUnidad] ? String(row[colUnidad]).trim() : 'gl';
-                const cantidad = colCantidad >= 0 ? parseFloat(row[colCantidad]) || 0 : 0;
                 const precio = colPrecio >= 0 ? limpiarNumeroExcel(row[colPrecio]) : 0;
-                nuevos.push({
-                    id: state.nextId++,
-                    nombre,
-                    unidad,
-                    cantidad: Math.round(cantidad * 10000) / 10000,
-                    precio,
-                    factores: []
-                });
+                const item = state.items.find(it => norm(it.nombre) === norm(nombre));
+                if (item) {
+                    item.precio = precio;
+                    actualizados++;
+                } else {
+                    noEncontrados.push(nombre);
+                }
             }
 
-            if (!nuevos.length) return alert('No se encontraron ítems válidos. Verificá que la plantilla tenga datos debajo del encabezado.');
-
-            if (state.items.length > 0) {
-                if (!confirm(`Se reemplazarán los ${state.items.length} ítems actuales por los ${nuevos.length} del Excel. ¿Continuás?`)) return;
-            }
-
-            const idsViejos = state.items.map(i => i.id);
-            state.versiones = state.versiones.filter(v => !idsViejos.includes(v.itemId));
-            state.plan = state.plan.filter(p => !idsViejos.includes(p.itemId));
-            state.real = state.real.filter(r => !idsViejos.includes(r.itemId));
-
-            state.items = nuevos;
             save();
             populateItemSelects();
             renderItems();
+            renderOficial();
             actualizarCardEstructura();
 
-            alert(`✓ ${nuevos.length} ítem${nuevos.length !== 1 ? 's' : ''} importado${nuevos.length !== 1 ? 's' : ''} correctamente.\nAhora podés cargar la estructura de costos para cada ítem.`);
+            let msg = `✓ ${actualizados} ítems actualizados con precio de oferta.`;
+            if (noEncontrados.length) msg += `\n\nNo encontrados (${noEncontrados.length}):\n${noEncontrados.slice(0, 10).join('\n')}${noEncontrados.length > 10 ? '\n...' : ''}`;
+            alert(msg);
         } catch (err) {
             alert('Error al leer el archivo: ' + err.message);
         }
@@ -643,18 +689,49 @@ function importarPresupuesto(input) {
 // MOSTRAR / OCULTAR CARD DE ESTRUCTURA
 // ═══════════════════════════════════════════════
 function actualizarCardEstructura() {
-    const card = document.getElementById('card-estructura-costos');
-    if (!card) return;
-    if (state.items.length > 0) {
-        card.style.display = '';
-        // Mostrar resumen de factores
-        const conFactores = state.items.filter(i => i.factores && i.factores.length > 0).length;
-        const total = state.items.length;
-        const el = document.getElementById('estructura-resumen');
-        if (el) {
-            el.innerHTML = `<span style="color:var(--text-2);font-size:13px">${conFactores} de ${total} ítems con estructura cargada</span>`;
-        }
-    } else {
-        card.style.display = 'none';
-    }
+    const el = document.getElementById('estructura-resumen');
+    if (!el) return;
+    if (!state.items.length) { el.innerHTML = ''; return; }
+
+    const conFactores = state.items.filter(i => i.factores && i.factores.length > 0).length;
+    const total = state.items.length;
+
+    el.innerHTML = `
+        <div style="font-size:13px;color:var(--text2);margin-bottom:10px">
+            ${conFactores} de ${total} ítems con estructura cargada
+        </div>
+        <div class="tbl-wrap" style="max-height:55vh;overflow-y:auto">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="text-align:center;width:40px">N°</th>
+                        <th>Ítem</th>
+                        <th style="text-align:center;width:120px">Estado</th>
+                        <th style="text-align:center;width:80px">Factores</th>
+                        <th style="text-align:center;width:80px">Suma</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${state.items.map(item => {
+        const tiene = item.factores && item.factores.length > 0;
+        const suma = tiene ? Math.round(item.factores.reduce((s, f) => s + f.peso, 0) * 100) / 100 : 0;
+        const ok = Math.abs(suma - 100) < 0.01;
+        return `<tr>
+                            <td style="text-align:center;color:var(--text2)">${item.nro || ''}</td>
+                            <td style="font-weight:500;max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.nombre}</td>
+                            <td style="text-align:center">
+                                ${tiene
+                ? ok
+                    ? '<span class="tag tag-ok" style="font-size:10px">✓ Completa</span>'
+                    : '<span class="tag tag-warn" style="font-size:10px">Incompleta</span>'
+                : '<span class="tag tag-no" style="font-size:10px">Sin estructura</span>'
+            }
+                            </td>
+                            <td style="text-align:center;font-size:12px">${tiene ? item.factores.length : '—'}</td>
+                            <td style="text-align:center;font-size:12px;color:${ok ? 'var(--ok)' : 'var(--danger)'}">${tiene ? suma + '%' : '—'}</td>
+                        </tr>`;
+    }).join('')}
+                </tbody>
+            </table>
+        </div>`;
 }
