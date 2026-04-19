@@ -28,6 +28,13 @@ function normalizar(s) {
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
+function switchTabEstructura(tabId, btn) {
+    document.querySelectorAll('#screen-estructura .tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('#screen-estructura .tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    btn.classList.add('active');
+}
+
 function descargarPlantillaPresupuesto() {
     const a = document.createElement('a');
     a.href = 'plantilla_presupuesto.xlsx';

@@ -5,7 +5,6 @@
 function renderPlanScreen() {
   populateItemSelects();
   renderPlanTable();
-  renderRemCards();
 }
 
 function renderPlanTable() {
@@ -18,13 +17,6 @@ function renderPlanTable() {
   // Períodos: unión de plan y real, ordenados
   const periodos = [...new Set(state.plan.map(p => p.periodo))].sort();
 
-  // Actualizar selects de remanente
-  const itemSel = document.getElementById('plan-item-select');
-  itemSel.innerHTML = state.items.map(i => `<option value="${i.id}">${i.nombre}</option>`).join('');
-
-  const perSel = document.getElementById('plan-periodo-select');
-  perSel.innerHTML = periodos.map(p => `<option value="${p}">${periodoLabel(p)}</option>`).join('');
-
   // Sin períodos todavía
   const thead = document.getElementById('plan-thead');
   if (!periodos.length) {
@@ -35,12 +27,12 @@ function renderPlanTable() {
 
   // Header
   thead.innerHTML = `<tr>
-        <th style="position:sticky;left:0;background:var(--surface);z-index:2;min-width:140px;font-size:12px;padding:4px 6px">Ítem</th>
-        <th style="min-width:45px;font-size:12px;padding:4px 6px">Un.</th>
-        <th style="min-width:60px;font-size:12px;padding:4px 6px">Cant.</th>
-        ${periodos.map(p => `<th style="min-width:64px;text-align:center;font-size:11px;padding:4px 3px;white-space:nowrap">${periodoLabel(p)}</th>`).join('')}
-        <th style="min-width:52px;text-align:center;font-size:12px;padding:4px 3px">%</th>
-    </tr>`;
+    <th>Ítem</th>
+    <th>Un.</th>
+    <th>Cant.</th>
+    ${periodos.map(p => `<th>${periodoLabel(p)}</th>`).join('')}
+    <th>%</th>
+  </tr>`;
 
   // Filas por ítem
   const tbody = document.getElementById('plan-tbody');
@@ -53,91 +45,22 @@ function renderPlanTable() {
       const planRow = state.plan.find(x => x.itemId === item.id && x.periodo === p);
       const cantPlan = planRow ? planRow.cantidad : null;
       if (cantPlan !== null) totalPlan += cantPlan;
-      const contenido = cantPlan !== null ? `<div style="font-size:12px;font-weight:500">${cantPlan}</div>` : '';
+      const contenido = cantPlan !== null ? `<span style="color:var(--ok);font-size:11px">${parseFloat(cantPlan.toFixed(4))}</span>` : '';
+      return `<td>${contenido}</td>`;
 
-      return `<td style="text-align:center;vertical-align:middle;padding:4px 3px">${contenido}</td>`;
     }).join('');
 
     const pct = cv > 0 ? totalPlan / cv : 0;
     const pctColor = pct > 1.001 ? 'var(--danger)' : pct >= 0.999 ? 'var(--ok)' : 'var(--warn)';
 
     return `<tr>
-              <td style="position:sticky;left:0;background:var(--surface);z-index:1;font-size:12px;padding:4px 6px">${item.nombre}</td>
-              <td style="text-align:center;font-size:11px;color:var(--text2);padding:4px 3px">${item.unidad}</td>
-              <td style="text-align:center;font-size:11px;padding:4px 3px">${cv}</td>
-              ${celdas}
-             <td style="text-align:center;font-size:11px;font-weight:600;color:${pctColor};padding:4px 3px">${fmtPct(pct)}</td>
-        </tr>`;
+      <td>${item.nombre}</td>
+      <td>${item.unidad}</td>
+      <td>${cv}</td>
+      ${celdas}
+      <td style="color:${pctColor}">${fmtPct(pct)}</td>
+    </tr>`;
   }).join('');
-}
-
-function renderRemCards() {
-  const itemId = parseInt(document.getElementById('plan-item-select').value);
-  const periodo = document.getElementById('plan-periodo-select').value;
-  const item = state.items.find(i => i.id === itemId);
-  const remCards = document.getElementById('plan-remanente-cards');
-
-  if (!item || !periodo) {
-    remCards.innerHTML = '<div class="empty" style="padding:16px"><div class="empty-sub">Seleccioná ítem y período</div></div>';
-    return;
-  }
-
-  const rem = remanente(itemId, periodo);
-  const cv = cantidadVigente(itemId, periodo);
-  const notaMap = {
-    'economia': ['tag-no', 'Economía — cantidad vigente 0'],
-    'penalizado': ['tag-warn', 'Penalizado — avance real supera al plan'],
-    'real-menor': ['tag-ok', 'Se aplica real (menor al teórico)'],
-    'teorico-menor': ['tag-ok', 'Se aplica teórico (menor al real)'],
-    'ok': ['tag-ok', 'Normal']
-  };
-  const [tagClass, notaTxt] = notaMap[rem.nota] || ['tag-neutral', ''];
-
-  remCards.innerHTML = `
-        <div class="metric" style="flex:1;min-width:140px">
-            <div class="metric-label">Cantidad vigente</div>
-            <div class="metric-val" style="font-size:18px">${cv} ${item.unidad}</div>
-        </div>
-        <div class="metric" style="flex:1;min-width:140px">
-            <div class="metric-label">Remanente teórico</div>
-            <div class="metric-val" style="font-size:18px">${fmtPct(rem.teorico)}</div>
-        </div>
-        <div class="metric" style="flex:1;min-width:140px">
-            <div class="metric-label">Remanente real</div>
-            <div class="metric-val" style="font-size:18px;color:${rem.real < rem.teorico ? 'var(--ok)' : 'var(--warn)'}">${fmtPct(rem.real)}</div>
-        </div>
-        <div class="metric" style="flex:1;min-width:140px;background:${rem.aplicado === 0 && rem.nota !== 'ok' ? 'var(--warn-bg)' : 'var(--surface2)'}">
-            <div class="metric-label">Remanente aplicado (MIN)</div>
-            <div class="metric-val" style="font-size:18px;font-weight:600">${fmtPct(rem.aplicado)}</div>
-            <div class="metric-sub"><span class="tag ${tagClass}" style="font-size:10px">${notaTxt}</span></div>
-        </div>`;
-}
-
-function guardarPlan() {
-  const itemId = parseInt(document.getElementById('plan-item-modal').value);
-  const cantidad = parseFloat(document.getElementById('plan-cantidad-modal').value);
-  if (!itemId || isNaN(cantidad)) return alert('Completá todos los campos');
-
-  let periodo = document.getElementById('plan-periodo-modal').value.trim();
-
-  if (!periodo) return alert('Completá todos los campos');
-
-  // Si ingresaron "MES-N" y hay fechaReplanteo, convertir a YYYY-MM
-  const matchMes = periodo.match(/^MES-(\d+)$/i);
-  if (matchMes && state.obra.fechaReplanteo) {
-    const idx = parseInt(matchMes[1]) - 1;
-    const [anioBase, mesBase] = state.obra.fechaReplanteo.split("-").map(Number);
-    const fecha = new Date(anioBase, mesBase - 1 + idx, 1);
-    const yyyy = fecha.getFullYear();
-    const mm = String(fecha.getMonth() + 1).padStart(2, "0");
-    periodo = `${yyyy}-${mm}`;
-  }
-
-  state.plan = state.plan.filter(p => !(p.itemId === itemId && p.periodo === periodo));
-  state.plan.push({ itemId, periodo, cantidad });
-  save();
-  closeModal('modal-cargar-plan');
-  renderPlanTable();
 }
 
 function remapearPeriodosPlan() {
@@ -172,18 +95,6 @@ function remapearPeriodosPlan() {
     }
     return r;
   });
-}
-
-function guardarReal() {
-  const itemId = parseInt(document.getElementById('real-item-modal').value);
-  const periodo = document.getElementById('real-periodo-modal').value;
-  const cantidad = parseFloat(document.getElementById('real-cantidad-modal').value);
-  if (!itemId || !periodo || isNaN(cantidad)) return alert('Completá todos los campos');
-  state.real = state.real.filter(r => !(r.itemId === itemId && r.periodo === periodo));
-  state.real.push({ itemId, periodo, cantidad });
-  save();
-  closeModal('modal-cargar-avance');
-  renderPlanTable();
 }
 
 function descargarPlantilla() {
@@ -331,6 +242,41 @@ function procesarPlanExcel(data) {
     alert(`Atención: estos ítems no coinciden y fueron ignorados:\n${errores.join('\n')}`);
   }
 
+  // Verificar si el nuevo plan afecta adecuaciones calculadas
+  const adecsProceden = state.adecuaciones.filter(a => a.procede).sort((a, b) => a.periodo.localeCompare(b.periodo));
+  if (adecsProceden.length) {
+    // Simular el nuevo plan temporalmente
+    let planSimulado = [...state.plan];
+    const itemsEnExcelTemp = filas.map(f => state.items.find(i => i.nombre.trim() === String(f[0] || '').trim())).filter(Boolean);
+    itemsEnExcelTemp.forEach(item => { planSimulado = planSimulado.filter(p => p.itemId !== item.id); });
+    nuevasPlan.forEach(np => {
+      planSimulado = planSimulado.filter(p => !(p.itemId === np.itemId && p.periodo === np.periodo));
+      planSimulado.push(np);
+    });
+    // Comparar remanentes con el plan nuevo vs el actual para cada adecuación
+    const itemsAfectados = new Set();
+    adecsProceden.forEach(adec => {
+      const periodoCalculo = adec.periodoCalculo || adec.periodo;
+      state.items.forEach(item => {
+        const remActual = remanente(item.id, periodoCalculo);
+        // Calcular remanente con plan simulado
+        const planOriginal = state.plan;
+        state.plan = planSimulado;
+        const remNuevo = remanente(item.id, periodoCalculo);
+        state.plan = planOriginal;
+        const planActualItem = state.plan.filter(p => p.itemId === item.id);
+        if (planActualItem.length > 0 && Math.abs(remActual.aplicado - remNuevo.aplicado) > 0.0001) {
+          itemsAfectados.add(`${item.nombre} (${periodoLabel(adec.periodo)})`);
+        }
+      });
+    });
+    if (itemsAfectados.size > 0) {
+      alert(`⚠️ Atención: el plan importado modifica el resultado de adecuaciones ya calculadas en los siguientes ítems:\n\n${[...itemsAfectados].join('\n')}\n\nEl plan NO fue importado. Verificá que el plan sea correcto.`);
+      document.getElementById('plan-file').value = '';
+      return;
+    }
+  }
+
   const itemsEnExcel = filas.map(f => state.items.find(i => i.nombre.trim() === String(f[0] || '').trim())).filter(Boolean);
   itemsEnExcel.forEach(item => { state.plan = state.plan.filter(p => p.itemId !== item.id); });
 
@@ -344,6 +290,13 @@ function procesarPlanExcel(data) {
   save();
   renderPlanTable();
   alert(`Plan cargado: ${nuevasPlan.length} registros importados.`);
+}
+
+function borrarPlan() {
+  if (!confirm('¿Seguro que querés borrar todo el plan de avance? Esta acción no se puede deshacer.')) return;
+  state.plan = [];
+  save();
+  renderPlanTable();
 }
 
 function cargarRealExcel(event) {
@@ -415,7 +368,7 @@ function procesarRealExcel(data) {
   document.getElementById('real-file').value = '';
 
   save();
-  renderPlanTable();
+  renderRealTable();
   alert(`Avance real cargado: ${nuevasReal.length} registros importados.`);
 }
 
@@ -548,11 +501,11 @@ function renderRealTable() {
   }
 
   thead.innerHTML = `<tr>
-    <th style="position:sticky;left:0;background:var(--surface);z-index:2;min-width:140px;font-size:12px;padding:4px 6px">Ítem</th>
-    <th style="min-width:45px;font-size:12px;padding:4px 6px">Un.</th>
-    <th style="min-width:60px;font-size:12px;padding:4px 6px">Cant.</th>
-    ${periodos.map(p => `<th style="min-width:64px;text-align:center;font-size:11px;padding:4px 3px;white-space:nowrap">${periodoLabel(p)}</th>`).join('')}
-    <th style="min-width:52px;text-align:center;font-size:12px;padding:4px 3px">%</th>
+    <th>Ítem</th>
+    <th>Un.</th>
+    <th>Cant.</th>
+    ${periodos.map(p => `<th>${periodoLabel(p)}</th>`).join('')}
+    <th>%</th>
   </tr>`;
 
   const tbody = document.getElementById('real-tbody');
@@ -566,15 +519,12 @@ function renderRealTable() {
       const cant = realRow ? realRow.cantidad : null;
       if (cant !== null) totalReal += cant;
       const val = cant !== null ? parseFloat(cant.toFixed(4)) : '';
-      return `<td style="text-align:center;vertical-align:middle;padding:2px 3px">
+      return `<td>
         <input type="number" step="any"
           value="${val}"
           data-item="${item.id}" data-periodo="${p}"
           onchange="guardarRealInline(this)"
           onwheel="this.blur()"
-          style="width:72px;text-align:center;font-size:11px;padding:2px 4px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--ok);-moz-appearance:textfield;"
-          onfocus="this.style.borderColor='var(--primary)';this.style.background='var(--surface2)'"
-          onblur="this.style.borderColor='transparent';this.style.background='transparent'"
         />
       </td>`;
     }).join('');
@@ -583,11 +533,11 @@ function renderRealTable() {
     const pctColor = pct > 1.001 ? 'var(--danger)' : pct >= 0.999 ? 'var(--ok)' : 'var(--warn)';
 
     return `<tr>
-      <td style="position:sticky;left:0;background:var(--surface);z-index:1;font-size:12px;padding:4px 6px">${item.nombre}</td>
-      <td style="text-align:center;font-size:11px;color:var(--text2);padding:4px 3px">${item.unidad}</td>
-      <td style="text-align:center;font-size:11px;padding:4px 3px">${cv}</td>
+      <td>${item.nombre}</td>
+      <td>${item.unidad}</td>
+      <td>${cv}</td>
       ${celdas}
-      <td style="text-align:center;font-size:11px;font-weight:600;color:${pctColor};padding:4px 3px">${fmtPct(pct)}</td>
+      <td style="color:${pctColor}">${fmtPct(pct)}</td>
     </tr>`;
   }).join('');
 }

@@ -139,71 +139,84 @@
 
                     <!-- ═══ ITEMS Y ESTRUCTURA ═══ -->
                     <div id="screen-estructura" class="screen">
-                        <div class="card">
-                            <div class="card-header">
-                                <div>
-                                    <div class="card-title">Oferta de la obra</div>
-                                    <div class="card-sub">Ítems con unidad, cantidad y precio unitario</div>
-                                </div>
-                                <div style="display:flex;gap:8px;align-items:center">
-                                    <div class="total-oferta-container"
-                                        style="font-size:1rem;font-weight:bold;margin-right:8px">
-                                        Total: <span id="total-oferta-items">$ 0,00</span>
+                        <div class="tabs">
+                            <button class="tab-btn active"
+                                onclick="switchTabEstructura('tab-oferta', this)">Oferta</button>
+                            <button class="tab-btn" onclick="switchTabEstructura('tab-estructura', this)">Estructura de
+                                costos</button>
+                        </div>
+
+                        <div id="tab-oferta" class="tab-content active">
+                            <div class="card">
+                                <div class="card-header">
+                                    <div>
+                                        <div class="card-title">Oferta de la obra</div>
+                                        <div class="card-sub">Ítems con unidad, cantidad y precio unitario</div>
                                     </div>
-                                    <button class="btn" onclick="descargarPlantillaPresupuesto()">⬇ Plantilla
-                                        oferta</button>
-                                    <label class="btn btn-primary" style="cursor:pointer">
-                                        ⬆ Importar oferta
-                                        <input type="file" accept=".xlsx" style="display:none"
-                                            onchange="importarPresupuesto(this)">
-                                    </label>
-                                    <label class="btn" style="cursor:pointer">
-                                        ⬆ Importar oficial
-                                        <input type="file" accept=".xlsx" style="display:none"
-                                            onchange="importarOficialExcel(this)">
-                                    </label>
+                                    <div style="display:flex;gap:8px;align-items:center">
+                                        <div style="font-size:1rem;font-weight:bold;margin-right:8px">
+                                            Total: <span id="total-oferta-items">$ 0,00</span>
+                                        </div>
+                                        <button class="btn" onclick="descargarPlantillaPresupuesto()">⬇ Plantilla
+                                            oferta</button>
+                                        <label class="btn btn-primary" style="cursor:pointer">
+                                            ⬆ Importar oferta
+                                            <input type="file" accept=".xlsx" style="display:none"
+                                                onchange="importarPresupuesto(this)">
+                                        </label>
+                                        <label class="btn" style="cursor:pointer">
+                                            ⬆ Importar oficial
+                                            <input type="file" accept=".xlsx" style="display:none"
+                                                onchange="importarOficialExcel(this)">
+                                        </label>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="tbl-wrap">
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th style="max-width:220px">Ítem</th>
-                                            <th style="width:60px;text-align:center">Unidad</th>
-                                            <th style="width:80px;text-align:center">Cantidad</th>
-                                            <th style="width:100px;text-align:center">Precio unit.</th>
-                                            <th style="width:100px;text-align:center">Total</th>
-                                            <th style="width:120px;text-align:center">Estructura de costos</th>
-                                            <th style="width:30px"></th>
-                                            <th style="width:80px;text-align:center">% Inc.</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="items-tbody"></tbody>
-                                </table>
-                            </div>
-                            <div id="items-empty" class="empty" style="display:none">
-                                <div class="empty-icon">⊞</div>
-                                <div class="empty-title">Sin ítems cargados</div>
-                                <div class="empty-sub">Descargá la plantilla, completala y luego importá la oferta</div>
+                                <div class="tbl-wrap">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th style="max-width:220px">Ítem</th>
+                                                <th style="width:60px;text-align:center">Unidad</th>
+                                                <th style="width:80px;text-align:center">Cantidad</th>
+                                                <th style="width:100px;text-align:center">Precio unit.</th>
+                                                <th style="width:100px;text-align:center">Total</th>
+                                                <th style="width:120px;text-align:center">Estructura de costos</th>
+                                                <th style="width:30px"></th>
+                                                <th style="width:80px;text-align:center">% Inc.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="items-tbody"></tbody>
+                                    </table>
+                                </div>
+                                <div id="items-empty" class="empty" style="display:none">
+                                    <div class="empty-icon">⊞</div>
+                                    <div class="empty-title">Sin ítems cargados</div>
+                                    <div class="empty-sub">Descargá la plantilla, completala y luego importá la oferta
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="card" id="card-estructura-costos" style="display:none">
-                            <div class="card-header">
-                                <div>
-                                    <div class="card-title">Estructura de costos</div>
-                                    <div class="card-sub">Factores de la polinómica por ítem (deben sumar 100%)</div>
+
+                        <div id="tab-estructura" class="tab-content">
+                            <div class="card">
+                                <div class="card-header">
+                                    <div>
+                                        <div class="card-title">Estructura de costos</div>
+                                        <div class="card-sub">Factores de la polinómica por ítem (deben sumar 100%)
+                                        </div>
+                                    </div>
+                                    <div style="display:flex;gap:8px">
+                                        <button class="btn" onclick="descargarPlantillaPolinomica()">⬇ Plantilla
+                                            polinómica</button>
+                                        <label class="btn btn-primary" style="cursor:pointer">
+                                            ⬆ Importar polinómica
+                                            <input type="file" accept=".xlsx" style="display:none"
+                                                onchange="importarPolinomica(this)">
+                                        </label>
+                                    </div>
                                 </div>
-                                <div style="display:flex;gap:8px">
-                                    <button class="btn" onclick="descargarPlantillaPolinomica()">⬇ Plantilla
-                                        polinómica</button>
-                                    <label class="btn btn-primary" style="cursor:pointer">
-                                        ⬆ Importar polinómica
-                                        <input type="file" accept=".xlsx" style="display:none"
-                                            onchange="importarPolinomica(this)">
-                                    </label>
-                                </div>
+                                <div id="estructura-resumen" style="padding:12px 0 4px"></div>
                             </div>
-                            <div id="estructura-resumen" style="padding:12px 0 4px"></div>
                         </div>
                     </div>
 
@@ -274,8 +287,7 @@
                                 Importar plan Excel</button>
                             <input type="file" id="plan-file" accept=".xlsx" style="display:none"
                                 onchange="cargarPlanExcel(event)">
-                            <button class="btn" onclick="openModal('modal-cargar-plan')" style="margin-left:auto">+
-                                Cargar período manual</button>
+                            <button class="btn btn-danger" onclick="borrarPlan()">🗑 Borrar plan</button>
                         </div>
                         <div class="card" style="margin-bottom:16px">
                             <div class="card-header">
@@ -284,28 +296,14 @@
                                     <div class="card-sub">Todos los ítems · todos los períodos</div>
                                 </div>
                             </div>
-                            <div class="tbl-wrap" style="overflow-x:auto;max-height:55vh">
+                            <div class="tbl-wrap tbl-wrap-plan">
                                 <table id="plan-tabla-completa" style="min-width:100%">
                                     <thead id="plan-thead"></thead>
                                     <tbody id="plan-tbody"></tbody>
                                 </table>
                             </div>
                         </div>
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="card-title">Remanente por ítem</div>
-                                <div style="display:flex;gap:8px;align-items:center">
-                                    <label style="font-size:12px;color:var(--text2)">Ítem</label>
-                                    <select id="plan-item-select" onchange="renderRemCards()"
-                                        style="font-size:12px"></select>
-                                    <label style="font-size:12px;color:var(--text2)">Período</label>
-                                    <select id="plan-periodo-select" onchange="renderRemCards()"
-                                        style="font-size:12px"></select>
-                                </div>
-                            </div>
-                            <div id="plan-remanente-cards" style="display:flex;gap:12px;flex-wrap:wrap;padding:8px 0">
-                            </div>
-                        </div>
+
                     </div>
 
                     <!-- ═══ AVANCE REAL ═══ -->
@@ -316,8 +314,6 @@
                                 Importar real Excel</button>
                             <input type="file" id="real-file" accept=".xlsx" style="display:none"
                                 onchange="cargarRealExcel(event)">
-                            <button class="btn" onclick="openModal('modal-cargar-avance')" style="margin-left:auto">+
-                                Cargar período manual</button>
                         </div>
                         <div class="card">
                             <div class="card-header">
@@ -326,7 +322,7 @@
                                     <div class="card-sub">Todos los ítems · todos los períodos</div>
                                 </div>
                             </div>
-                            <div class="tbl-wrap" style="overflow-x:auto;max-height:65vh">
+                            <div class="tbl-wrap tbl-wrap-plan">
                                 <table id="real-tabla-completa" style="min-width:100%">
                                     <thead id="real-thead"></thead>
                                     <tbody id="real-tbody"></tbody>
@@ -664,70 +660,6 @@
             <div class="modal-foot">
                 <button class="btn" onclick="closeModal('modal-nueva-version')">Cancelar</button>
                 <button class="btn btn-primary" onclick="guardarVersion()">Guardar modificación</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Cargar plan -->
-    <div class="modal-overlay" id="modal-cargar-plan">
-        <div class="modal">
-            <div class="modal-head">
-                <div class="modal-title">Cargar período de plan</div>
-                <button class="modal-close" onclick="closeModal('modal-cargar-plan')">×</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Ítem</label>
-                        <select id="plan-item-modal"></select>
-                    </div>
-                    <div class="form-group">
-                        <label>Período</label>
-                        <input type="month" id="plan-periodo-modal">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Cantidad planificada</label>
-                        <input type="number" id="plan-cantidad-modal" step="any" placeholder="0">
-                    </div>
-                </div>
-            </div>
-            <div class="modal-foot">
-                <button class="btn" onclick="closeModal('modal-cargar-plan')">Cancelar</button>
-                <button class="btn btn-primary" onclick="guardarPlan()">Guardar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Cargar avance real -->
-    <div class="modal-overlay" id="modal-cargar-avance">
-        <div class="modal">
-            <div class="modal-head">
-                <div class="modal-title">Cargar avance real (certificado)</div>
-                <button class="modal-close" onclick="closeModal('modal-cargar-avance')">×</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Ítem</label>
-                        <select id="real-item-modal"></select>
-                    </div>
-                    <div class="form-group">
-                        <label>Período</label>
-                        <input type="month" id="real-periodo-modal">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Cantidad ejecutada</label>
-                        <input type="number" id="real-cantidad-modal" step="any" placeholder="0">
-                    </div>
-                </div>
-            </div>
-            <div class="modal-foot">
-                <button class="btn" onclick="closeModal('modal-cargar-avance')">Cancelar</button>
-                <button class="btn btn-primary" onclick="guardarReal()">Guardar</button>
             </div>
         </div>
     </div>
