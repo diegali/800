@@ -5,10 +5,7 @@
 function renderIOP() {
     document.getElementById('gatillo-val').value = state.gatillo || 10;
 
-    const baseSelect = document.getElementById('gatillo-base');
     const periodos = Object.keys(window.iopGlobal || {}).filter(p => p !== '_orden').sort();
-    baseSelect.innerHTML = `<option value="">— Sin base —</option>`
-        + periodos.map(p => `<option value="${p}" ${p === state.iopBase ? 'selected' : ''}>${periodoLabel(p)}</option>`).join('');
 
     renderIOPMatriz();
     renderIOPEstado();
@@ -120,19 +117,24 @@ function getIOPConsolidado(periodo, basePeriodo) {
 
     const items = state.items || [];
 
-    // 🔴 1. TOTAL OBRA (precio * cantidad)
+    function normUp(s) {
+        return s.trim().toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    }
+
+    // ✅ Usa precioOficial para ponderadores, sino precio
     let totalPrecio = 0;
     for (const item of items) {
-        totalPrecio += (Number(item.precio) || 0) * (Number(item.cantidad) || 0);
+        const p = Number(item.precioOficial) || Number(item.precio) || 0;
+        totalPrecio += p * (Number(item.cantidad) || 0);
     }
 
     if (!totalPrecio) return null;
 
-    // 🔴 2. POLINÓMICA CORRECTA (SUMAPRODUCTO como Excel)
     const pesosPorFactor = {};
-
     for (const item of items) {
-        const importe = (Number(item.precio) || 0) * (Number(item.cantidad) || 0);
+        const p = Number(item.precioOficial) || Number(item.precio) || 0;
+        const importe = p * (Number(item.cantidad) || 0);
         if (!importe || !item.factores) continue;
 
         const ponderadorItem = importe / totalPrecio;
@@ -140,42 +142,60 @@ function getIOPConsolidado(periodo, basePeriodo) {
         for (const f of item.factores) {
             const key = f.nombre.trim().toUpperCase();
             const peso = (Number(f.peso) || 0) / 100;
-
             if (!pesosPorFactor[key]) pesosPorFactor[key] = 0;
-
-            // 🔴 SUMAPRODUCTO REAL
             pesosPorFactor[key] += peso * ponderadorItem;
         }
     }
 
-    // 🔴 3. CÁLCULO VRI
     let total = 0;
-
     for (const [factor, peso] of Object.entries(pesosPorFactor)) {
-        const keyActual = Object.keys(iopActual).find(k =>
-            k.trim().toUpperCase() === factor
-        );
-
-        const keyBase = Object.keys(iopBase).find(k =>
-            k.trim().toUpperCase() === factor
-        );
-
-        if (!keyActual || !keyBase) {
-            console.warn("Factor no encontrado:", factor, periodo, basePeriodo);
-            continue;
-        }
-
+        const keyActual = Object.keys(iopActual).find(k => normUp(k) === normUp(factor));
+        const keyBase = Object.keys(iopBase).find(k => normUp(k) === normUp(factor));
         if (!keyActual || !keyBase) continue;
 
         const vActual = iopActual[keyActual];
         const vBase = iopBase[keyBase];
-
         if (vActual == null || vBase == null) continue;
 
         total += peso * (vActual / vBase - 1);
     }
 
     return total;
+}
+
+function getFactorItem(item, periodo, basePeriodo) {
+    const iopActual = window.iopGlobal[periodo];
+    const iopBase = basePeriodo ? window.iopGlobal[basePeriodo] : null;
+    if (!iopActual || !iopBase || !item.factores || !item.factores.length) return null;
+
+    function normUp(s) {
+        return s.trim().toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    }
+
+    let factor = 0;
+    let pesoTotal = 0;
+
+    for (const f of item.factores) {
+        const key = f.nombre.trim().toUpperCase();
+        const peso = (Number(f.peso) || 0) / 100;
+
+        // ✅ CORREGIDO: busca `key` (nombre del factor), no `factor` (número)
+        const keyActual = Object.keys(iopActual).find(k => normUp(k) === normUp(key));
+        const keyBase = Object.keys(iopBase).find(k => normUp(k) === normUp(key));
+
+        if (!keyActual || !keyBase) continue;
+
+        const vActual = iopActual[keyActual];
+        const vBase = iopBase[keyBase];
+        if (vActual == null || vBase == null || vBase === 0) continue;
+
+        factor += peso * (vActual / vBase);
+        pesoTotal += peso;
+    }
+
+    if (!pesoTotal) return null;
+    return 1 + (factor - pesoTotal);
 }
 
 function getIOP(periodo, basePeriodo) {
@@ -185,7 +205,6 @@ function getIOP(periodo, basePeriodo) {
 
 function recalcIOP() {
     state.gatillo = parseFloat(document.getElementById('gatillo-val').value) || 10;
-    state.iopBase = document.getElementById('gatillo-base').value || null;
     save();
     renderIOP();
 }
@@ -194,149 +213,72 @@ function recalcIOP() {
 
 function renderIOPEstado() {
     const el = document.getElementById('iop-estado-cards');
-    const gatillo = (state.gatillo || 10) / 100;
-
     const periodos = Object.keys(window.iopGlobal || {}).sort();
+    const factores = window.iopOrden ? Object.keys(window.iopOrden) : [];
     if (!periodos.length) {
         el.innerHTML = `<div class="empty" style="padding:16px">
-            <div class="empty-sub">Importá el IOP</div>
+            <div class="empty-sub">Importá el IOP para ver el estado</div>
         </div>`;
-        updateIOPStatusPill();
         return;
     }
-
-    let basePeriodo = periodos[0]; // marzo
-    let variacion = 0;
-    let supera = false;
-
-    // 🔴 agregar el primer valor manual (marzo = 0)
-    let resultados = [{
-        periodo: periodos[0],
-        variacion: 0
-    }];
-
-    for (let i = 1; i < periodos.length; i++) {
-        const periodo = periodos[i];
-
-        // 🔴 ahora sí abril se calcula vs marzo
-        variacion = getIOPConsolidado(periodo, basePeriodo);
-
-        resultados.push({ periodo, variacion });
-
-        supera = variacion > gatillo;
-
-        if (supera) {
-            basePeriodo = periodos[i - 1];
-        }
-    }
-
-    const lastPeriodo = periodos[periodos.length - 1];
-    const vBase = getIOP(basePeriodo);
-    const vActual = getIOP(lastPeriodo);
-    const falta = variacion !== null ? Math.max(0, gatillo - variacion) : null;
-
+    const primero = periodos[0];
+    const ultimo = periodos[periodos.length - 1];
     el.innerHTML = `
-        <div class="metric" style="margin-bottom:10px">
-            <div class="metric-label">Base activa</div>
-            <div class="metric-val" style="font-size:15px">${periodoLabel(basePeriodo)}</div>
-            <div class="metric-sub">IOP ${vBase != null ? vBase.toLocaleString('es-AR', { maximumFractionDigits: 2 }) : '—'}</div>
+        <div class="metric" style="margin-bottom:10px;text-align:center">
+            <div class="metric-label">Períodos cargados</div>
+            <div class="metric-val" style="font-size:20px">${periodos.length}</div>
+            <div class="metric-sub">${periodoLabel(primero)} — ${periodoLabel(ultimo)}</div>
         </div>
-        <div class="metric" style="margin-bottom:10px">
-            <div class="metric-label">Último período cargado</div>
-            <div class="metric-val" style="font-size:15px">${periodoLabel(lastPeriodo)}</div>
-            <div class="metric-sub">IOP ${vActual != null ? vActual.toLocaleString('es-AR', { maximumFractionDigits: 2 }) : '—'}</div>
+        <div class="metric" style="margin-bottom:10px;text-align:center">
+            <div class="metric-label">Factores cargados</div>
+            <div class="metric-val" style="font-size:20px">${factores.length}</div>
         </div>
-        <div class="metric" style="background:${supera ? 'var(--ok-bg)' : 'var(--warn-bg)'}">
-            <div class="metric-label" style="color:${supera ? 'var(--ok)' : 'var(--warn)'}">Variación acumulada</div>
-            <div class="metric-val" style="font-size:20px;color:${supera ? 'var(--ok)' : 'var(--warn)'}">
-                ${variacion !== null ? (variacion >= 0 ? '+' : '') + (variacion * 100).toFixed(2) + '%' : '—'}
-            </div>
-            <div class="metric-sub" style="color:${supera ? 'var(--ok)' : 'var(--warn)'}">
-                ${supera
-            ? '✓ Gatillo superado — procede adecuación'
-            : falta !== null
-                ? 'Falta +' + (falta * 100).toFixed(2) + '% para el gatillo'
-                : ''}
-            </div>
+        <div class="metric" style="text-align:center">
+            <div class="metric-label">Último período</div>
+            <div class="metric-val" style="font-size:15px">${periodoLabel(ultimo)}</div>
+            <div class="metric-sub">Gatillo: ${state.gatillo || 10}%</div>
         </div>`;
-
-    updateIOPStatusPill();
-}
-
-function updateIOPStatusPill() {
-    const pill = document.getElementById('iop-status-pill');
-    if (!pill) return;
-
-    const periodos = Object.keys(window.iopGlobal || {}).sort();
-    if (!periodos.length) {
-        pill.textContent = 'Sin índices IOP';
-        pill.className = 'tag tag-neutral';
-        return;
-    }
-
-    const last = periodos[periodos.length - 1];
-    const base = calcIopBase(last);
-    const vBase = base ? getIOP(base) : null;
-    const vActual = getIOP(last);
-    const varAcum = (vBase && vActual) ? (vActual / vBase - 1) : null;
-    const gatillo = state.gatillo || 10;
-
-    if (varAcum === null) {
-        pill.textContent = 'IOP sin base';
-        pill.className = 'tag tag-neutral';
-        return;
-    }
-
-    if (varAcum * 100 >= gatillo) {
-        pill.textContent = 'IOP acum. +' + (varAcum * 100).toFixed(1) + '% — gatillo activado';
-        pill.className = 'tag tag-ok';
-    } else {
-        const falta = gatillo / 100 - varAcum;
-        pill.textContent = 'IOP acum. +' + (varAcum * 100).toFixed(1) + '% — falta +' + (falta * 100).toFixed(1) + '%';
-        pill.className = 'tag tag-warn';
-    }
 }
 
 function renderIOPMatriz() {
     const table = document.getElementById('iop-matrix');
     const periodos = Object.keys(window.iopGlobal || {}).filter(p => p !== '_orden').sort();
-
     if (!periodos.length) {
-        table.innerHTML = `<tbody><tr><td colspan="3" style="text-align:center;padding:32px;color:var(--text-2);font-size:13px">
-            Sin datos. Importá el Excel del IOP para comenzar.
+        table.innerHTML = `<tbody><tr><td colspan="3" style="text-align:center;padding:48px;color:var(--text3);font-size:13px">
+            Sin datos — importá el Excel del IOP para comenzar.
         </td></tr></tbody>`;
         return;
     }
-
     const orden = window.iopOrden || {};
     const factores = Object.keys(orden).sort((a, b) => orden[a] - orden[b]);
     if (!factores.length) { table.innerHTML = ''; return; }
 
+    const pill = document.getElementById('iop-resumen-pill');
+    if (pill) {
+        pill.innerHTML = `<span class="tag tag-neutral" style="font-size:11px">${factores.length} factores · ${periodos.length} períodos</span>`;
+    }
+
     let html = '<thead><tr>';
-    html += `<th class="sticky-header sticky-col-nro">N°</th>`;
-    html += `<th class="sticky-header sticky-col-factor">Factor</th>`;
+    html += `<th class="sticky-header sticky-col-nro" style="font-size:10px">N°</th>`;
+    html += `<th class="sticky-header sticky-col-factor" style="font-size:11px">Factor</th>`;
     periodos.forEach(p => {
-        const esBase = p === state.iopBase;
-        html += `<th class="sticky-header" style="${esBase ? 'background:#e8f0fe;color:var(--accent)' : ''}">`
-            + periodoLabel(p)
-            + (esBase ? '<br><span style="font-size:9px;font-weight:400;opacity:.8">BASE</span>' : '')
-            + '</th>';
+        html += `<th class="sticky-header" style="font-size:10px;text-align:right;padding:6px 8px;white-space:nowrap">${periodoLabel(p)}</th>`;
     });
     html += '</tr></thead><tbody>';
 
     factores.forEach((factor, index) => {
-        html += '<tr>';
-        html += `<td class="sticky-col-nro">${index + 1}</td>`;
-        html += `<td class="sticky-col-factor">${factor}</td>`;
+        const bg = index % 2 === 0 ? '' : 'background:var(--surface2)';
+        html += `<tr style="${bg}">`;
+        html += `<td class="sticky-col-nro" style="${bg};font-size:10px;color:var(--text3)">${index + 1}</td>`;
+        html += `<td class="sticky-col-factor" style="${bg};font-size:12px;font-weight:500">${factor}</td>`;
         periodos.forEach(p => {
             const valor = window.iopGlobal[p] ? window.iopGlobal[p][factor] : null;
             html += valor != null
-                ? `<td>${valor.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</td>`
-                : `<td style="color:#ccc;text-align:center">—</td>`;
+                ? `<td style="text-align:right;font-size:11px;padding:6px 8px;font-family:var(--mono)">${valor.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</td>`
+                : `<td style="text-align:center;color:var(--border2);font-size:11px">—</td>`;
         });
         html += '</tr>';
     });
-
     html += '</tbody>';
     table.innerHTML = html;
 }

@@ -571,7 +571,8 @@ function renderRealTable() {
           value="${val}"
           data-item="${item.id}" data-periodo="${p}"
           onchange="guardarRealInline(this)"
-          style="width:72px;text-align:center;font-size:11px;padding:2px 4px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--ok)"
+          onwheel="this.blur()"
+          style="width:72px;text-align:center;font-size:11px;padding:2px 4px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--ok);-moz-appearance:textfield;"
           onfocus="this.style.borderColor='var(--primary)';this.style.background='var(--surface2)'"
           onblur="this.style.borderColor='transparent';this.style.background='transparent'"
         />

@@ -20,6 +20,7 @@ function periodoLabel(p) {
     const meses = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     return meses[parseInt(m)] + ' ' + y;
 }
+
 function cantidadVigente(itemId, periodo) {
     const item = state.items.find(i => i.id === itemId);
     if (!item) return 0;
@@ -28,6 +29,7 @@ function cantidadVigente(itemId, periodo) {
         .sort((a, b) => b.fecha.localeCompare(a.fecha));
     return vers.length ? vers[0].cantidad : item.cantidad;
 }
+
 function acumPlan(itemId, hasta) {
     return state.plan
         .filter(p => p.itemId === itemId && p.periodo <= hasta)

@@ -1,3 +1,33 @@
+const EQUIVALENCIAS_FACTORES = {
+    'equipo - amortizacion de equipos': 'Equipo - Amort. Equipo',
+    'equipo - amort. equipo': 'Equipo - Amort. Equipo',
+    'sustancias plasticas y elastomeros': 'Sust. plásticas y elastómeros',
+    'sust. plasticas y elastomeros': 'Sust. plásticas y elastómeros',
+    'instlaciones electricas': 'Instalaciones eléctricas',
+    'instalaciones electricas': 'Instalaciones eléctricas',
+    'albanileria': 'Albañilería',
+    'aridos': 'Áridos',
+    'aridos triturados': 'Áridos Triturados',
+    'aisladores, morseteria y herrajes': 'Aisl. mors. herrajes',
+    'aisladores morseteria y herrajes': 'Aisl. mors. herrajes',
+    'gastos generales': 'Gastos generales',
+    'gastos varios': 'Gastos varios',
+    'mano de obra': 'Mano de obra',
+    'carpinteria': 'Carpintería',
+    'instalaciones de gas': 'Instalaciones de gas',
+    'instalaciones sanitarias': 'Instalaciones sanitarias',
+    'carpinteria de aluminio': 'Carpintería de Aluminio',
+    'carpinteria de madera': 'Carpintería de Madera',
+    'productos de plastico': 'Productos de plástico',
+    'productos quimicos': 'Productos químicos',
+    'pintura termoplastica reflectante': 'Pintura termoplástica reflectante',
+};
+
+function normalizar(s) {
+    return String(s).trim().toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 function descargarPlantillaPresupuesto() {
     const a = document.createElement('a');
     a.href = 'plantilla_presupuesto.xlsx';
@@ -10,6 +40,108 @@ function descargarPlantillaEstructura() {
     a.href = 'plantilla_items.xlsx';
     a.download = 'plantilla_estructura.xlsx';
     a.click();
+}
+
+function importarOficialExcel(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const wb = XLSX.read(data, { type: 'array' });
+
+            // Buscar hoja: acepta 'Presupuesto', 'Hoja1', o la primera
+            const ws = wb.Sheets['Presupuesto'] || wb.Sheets['Hoja1'] || wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+            const precios = [];
+            rows.forEach(r => {
+                const colB = r[1]; // nombre ítem
+                const colE = r[4]; // precio unitario
+                // Fila de ítem: col B tiene nombre, col E tiene número
+                if (typeof colB === 'string' && colB.trim() !== '' && colE !== null && !isNaN(parseFloat(colE))) {
+                    precios.push(parseFloat(colE) || 0);
+                }
+            });
+
+            if (!precios.length) return alert('No se encontraron ítems en el archivo.');
+            if (precios.length !== state.items.length) {
+                return alert(`El presupuesto oficial tiene ${precios.length} ítems pero la obra tiene ${state.items.length}. Deben coincidir exactamente.`);
+            }
+
+            state.items.forEach((item, i) => {
+                item.precioOficial = precios[i];
+            });
+
+            save();
+            renderItems();
+            alert(`✓ Precios oficiales importados para ${precios.length} ítems.`);
+        } catch (err) {
+            alert('Error al leer el archivo: ' + err.message);
+        }
+        input.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function importarPolinomica(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+        if (!rows.length) return alert('Archivo vacío.');
+
+        const header = rows[0];
+        // col 0=Nº, col 1=Factor, col 2+ = items
+        const itemNames = header.slice(2).map(v => v ? String(v).trim() : null);
+        const factorRows = rows.slice(1).filter(r => r[1] != null);
+
+        let actualizados = 0;
+        let noEncontrados = [];
+
+        state.items.forEach(item => {
+            const colIdx = itemNames.findIndex(n => n && normalizar(n) === normalizar(item.nombre));
+            if (colIdx === -1) { noEncontrados.push(item.nombre); return; }
+            const colReal = colIdx + 2; // offset por Nº y Factor
+
+            const factores = [];
+            factorRows.forEach(row => {
+                const nombreFactor = row[1] ? String(row[1]).trim() : null;
+                const val = row[colReal];
+                if (!nombreFactor || val == null || val === 0) return;
+                // Buscar en LISTA_FACTORES por nombre normalizado
+                const factorNorm = normalizar(nombreFactor);
+                const nombreEnLista = window.LISTA_FACTORES.find(f => normalizar(f) === factorNorm)
+                    || EQUIVALENCIAS_FACTORES[factorNorm]
+                    || null;
+                if (!nombreEnLista) return;
+                const peso = typeof val === 'number' ? (val <= 1 ? val * 100 : val) : parseFloat(val);
+                if (!isNaN(peso) && peso > 0) {
+                    factores.push({ nombre: nombreEnLista, peso: Math.round(peso * 10000) / 10000 });
+                }
+            });
+
+            if (factores.length) {
+                item.factores = factores;
+                actualizados++;
+            }
+        });
+
+        input.value = '';
+        save();
+        renderItems();
+
+        let msg = `Polinómica importada: ${actualizados} ítems actualizados.`;
+        if (noEncontrados.length) msg += `\n\nNo encontrados:\n${noEncontrados.join('\n')}`;
+        alert(msg);
+    };
+    reader.readAsArrayBuffer(file);
 }
 
 // ═══════════════════════════════════════════════
@@ -45,7 +177,7 @@ function renderItems() {
         const incidencia = totalOferta > 0 ? (montoItem / totalOferta) * 100 : 0;
         const tieneFactores = item.factores && item.factores.length > 0;
         const factCount = item.factores ? item.factores.length : 0;
-        const factSum = item.factores ? item.factores.reduce((s, f) => s + f.peso, 0) : 0;
+        const factSum = Math.round(item.factores.reduce((s, f) => s + f.peso, 0) * 100) / 100;
         const factOk = factSum === 100;
 
         return `<tr>
@@ -370,6 +502,29 @@ function importarItemsExcel(input) {
         input.value = '';
     };
     reader.readAsArrayBuffer(file);
+}
+
+function descargarPlantillaPolinomica() {
+    if (!state.items.length) return alert('No hay ítems cargados.');
+
+    const header = ['Nº', 'Factor', ...state.items.map(i => i.nombre)];
+    const filas = window.LISTA_FACTORES.map((nombre, idx) => {
+        return [idx + 1, nombre, ...state.items.map(() => null)];
+    });
+
+    const aoa = [header, ...filas];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    ws['!cols'] = [
+        { wch: 5 },
+        { wch: 35 },
+        ...state.items.map(() => ({ wch: 18 }))
+    ];
+    ws['!freeze'] = { xSplit: 2, ySplit: 1 };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Polinómica');
+    XLSX.writeFile(wb, `polinomica_${state.obra.nombre || 'obra'}.xlsx`);
 }
 
 // ═══════════════════════════════════════════════

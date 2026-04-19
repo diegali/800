@@ -1,0 +1,173 @@
+/* ── Layout general ── */
+.content {
+  overflow-x: hidden;
+}
+
+/* ── Pantalla IOP ── */
+.grid-iop {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) 160px;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.grid-iop > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.grid-iop > div > .card {
+  flex: 1;
+}
+
+@media (max-width: 1200px) {
+  .grid-iop {
+    grid-template-columns: 1fr;
+  }
+}
+
+.grid-iop > div:last-child {
+  max-width: 350px;
+}
+
+/* ── Tabla IOP matrix ── */
+#iop-matrix td:first-child,
+#iop-matrix th:first-child {
+  position: sticky;
+  left: 0;
+  background: white;
+  z-index: 1;
+}
+
+#iop-matrix {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+#iop-matrix th,
+#iop-matrix td {
+  border: 1px solid #eee;
+  padding: 4px 6px;
+  white-space: nowrap;
+}
+
+#iop-matrix th {
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+  z-index: 3;
+}
+
+.sticky-header {
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+  z-index: 3;
+}
+
+.sticky-col-nro {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 2;
+  text-align: center;
+  width: 27px;
+  min-width: 27px;
+  max-width: 27px;
+  box-shadow: 2px 0 0 0 #eee;
+}
+
+.sticky-col-factor {
+  position: sticky;
+  left: 27px;
+  background: #fff;
+  z-index: 2;
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
+  box-shadow: 3px 0 6px -2px rgba(0,0,0,0.12);
+}
+
+.sticky-header.sticky-col-nro,
+.sticky-header.sticky-col-factor {
+  z-index: 4;
+}
+
+#iop-matrix th.sticky-col-nro,
+#iop-matrix th.sticky-col-factor {
+  z-index: 5;
+  background: #fafafa;
+}
+
+#iop-matrix td {
+  text-align: right;
+  font-size: 11px;
+}
+
+#iop-matrix tr:hover {
+  background: #f5f7fa;
+}
+
+#iop-matrix tr:hover td.sticky-col-nro,
+#iop-matrix tr:hover td.sticky-col-factor {
+  background: #f5f7fa;
+}
+
+/* ── Pantalla adecuaciones ── */
+#screen-adecuaciones {
+  min-width: 0;
+}
+
+#screen-adecuaciones .card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Ocultar flechas inputs numéricos */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* Avance real — thead fijo */
+#real-tabla-completa thead tr th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+}
+
+#real-tabla-completa thead tr th:first-child {
+  z-index: 3;
+}
+
+#items-tbody td:first-child,
+#items-tbody th:first-child {
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#items-tbody td {
+    text-align: center;
+}
+#items-tbody td:first-child {
+    text-align: left;
+}
+#items-tbody td:nth-child(4),
+#items-tbody td:nth-child(5) {
+    text-align: right;
+}
+
+#screen-adecuaciones {
+    overflow-x: auto;
+}
+#adec-gatillo-container {
+    overflow-x: auto;
+    width: 100%;
+}

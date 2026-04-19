@@ -4,7 +4,6 @@
 async function guardarObra() {
     const nombre = document.getElementById('obra-nombre').value.trim();
     if (!nombre) return alert('El nombre de la obra es obligatorio.');
-
     const datosObra = {
         nombre,
         expediente: document.getElementById('obra-expediente').value.trim(),
@@ -12,9 +11,10 @@ async function guardarObra() {
         fecha: document.getElementById('obra-fecha').value,
         fechaReplanteo: document.getElementById('obra-fecha-replanteo').value,
         contratista: document.getElementById('obra-contratista').value.trim(),
-        duracionDias: Number(document.getElementById("obra-duracion-dias").value)
+        duracionDias: Number(document.getElementById('obra-duracion-dias').value),
+        anticipoPct: Number(document.getElementById('obra-anticipo-pct').value) || 0,
+        anticipoPeriodo: document.getElementById('obra-anticipo-periodo').value || ''
     };
-
     await crearNuevaObra(datosObra);
 }
 
@@ -45,6 +45,8 @@ function abrirEditarObra() {
     document.getElementById('edit-obra-fecha').value = o.fecha || '';
     document.getElementById('edit-obra-fecha-replanteo').value = o.fechaReplanteo || '';
     document.getElementById('edit-obra-duracion-dias').value = o.duracionDias || '';
+    document.getElementById('edit-obra-anticipo-pct').value = o.anticipoPct || '';
+    document.getElementById('edit-obra-anticipo-periodo').value = o.anticipoPeriodo || '';
     const meses = o.duracionDias ? Math.ceil(o.duracionDias / 30) : '';
     document.getElementById('edit-obra-duracion-meses').value = meses ? `${meses} meses` : '';
     openModal('modal-editar-obra');
@@ -64,7 +66,9 @@ async function guardarEdicionObra() {
         fechaApertura: document.getElementById('edit-obra-fecha-apertura').value,
         fecha: document.getElementById('edit-obra-fecha').value,
         fechaReplanteo: document.getElementById('edit-obra-fecha-replanteo').value,
-        duracionDias: Number(document.getElementById('edit-obra-duracion-dias').value)
+        duracionDias: Number(document.getElementById('edit-obra-duracion-dias').value),
+        anticipoPct: Number(document.getElementById('edit-obra-anticipo-pct').value) || 0,
+        anticipoPeriodo: document.getElementById('edit-obra-anticipo-periodo').value || ''
     };
 
     const fechaReplanteoNueva = state.obra.fechaReplanteo;
@@ -80,12 +84,8 @@ async function guardarEdicionObra() {
             const mm = String(fecha.getMonth() + 1).padStart(2, "0");
             mapaFechas[label] = `${yyyy}-${mm}`;
         }
-        state.plan = state.plan.map(function (p) {
-            return mapaFechas[p.periodo] ? { ...p, periodo: mapaFechas[p.periodo] } : p;
-        });
-        state.real = state.real.map(function (r) {
-            return mapaFechas[r.periodo] ? { ...r, periodo: mapaFechas[r.periodo] } : r;
-        });
+        state.plan = state.plan.map(p => mapaFechas[p.periodo] ? { ...p, periodo: mapaFechas[p.periodo] } : p);
+        state.real = state.real.map(r => mapaFechas[r.periodo] ? { ...r, periodo: mapaFechas[r.periodo] } : r);
     }
 
     await save();

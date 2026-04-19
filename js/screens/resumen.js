@@ -14,14 +14,21 @@ function renderResumen() {
         infoEl.textContent = partes.join(' · ');
     }
     const totalOrig = state.items.reduce((s, i) => s + i.cantidad * i.precio, 0);
-    const totalVig = state.items.reduce((s, i) => {
-        const lastPeriodo = Object.keys(window.iopGlobal || {}).sort().pop() || '9999-12';
-        return s + cantidadVigente(i.id, lastPeriodo) * i.precio;
-    }, 0);
-    const totalAdec = state.adecuaciones.filter(a => a.procede).reduce((s, a) => s + a.total, 0);
+    const adecsProceden = state.adecuaciones.filter(a => a.procede).sort((a, b) => a.periodo.localeCompare(b.periodo));
+    const totalAjusteOC = adecsProceden.reduce((s, a) =>
+        s + (a.detalle || []).reduce((s2, d) => s2 + (d.ajusteOC ?? 0), 0), 0);
+    const totalSaldo = adecsProceden.reduce((s, a) =>
+        s + (a.detalle || []).reduce((s2, d) => s2 + (d.saldoReintegro ?? 0), 0), 0);
+    const nuevoMonto = totalOrig + totalAjusteOC;
+
     document.getElementById('r-contrato').textContent = fmt$(totalOrig);
-    document.getElementById('r-vigente').textContent = fmt$(totalVig);
-    document.getElementById('r-adecuado').textContent = fmt$(totalAdec);
+    document.getElementById('r-contrato-sub').textContent = `${state.items.length} ítems`;
+    document.getElementById('r-vigente').textContent = fmt$(nuevoMonto);
+    document.getElementById('r-vigente-sub').textContent = `${adecsProceden.length} adecuación${adecsProceden.length !== 1 ? 'es' : ''} aplicada${adecsProceden.length !== 1 ? 's' : ''}`;
+    document.getElementById('r-adecuado').textContent = fmt$(totalAjusteOC);
+    document.getElementById('r-adecuado-sub').textContent = `${adecsProceden.length} adecuación${adecsProceden.length !== 1 ? 'es' : ''}`;
+    document.getElementById('r-saldo').textContent = fmt$(totalSaldo);
+    document.getElementById('r-saldo-sub').textContent = 'Redeterminación definitiva';
 
     // Adecuaciones list
     const adecList = document.getElementById('resumen-adecuaciones-list');
@@ -31,12 +38,13 @@ function renderResumen() {
     } else {
         adecList.innerHTML = adecs.map((a, idx) => {
             const varPct = ((a.iopActual / a.iopBase - 1) * 100).toFixed(1);
+            const ajusteOC = (a.detalle || []).reduce((s, d) => s + (d.ajusteOC ?? 0), 0);
             return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <span style="font-size:13px;font-weight:500">Adecuación provisoria ${idx + 1}</span>
           <span class="tag tag-ok">Calculada</span>
         </div>
-        <div style="font-size:12px;color:var(--text2);margin-top:2px">${periodoLabel(a.periodo)} · ${fmt$(a.total)} · IOP +${varPct}%</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">${periodoLabel(a.periodo)} · Ajuste OC: ${fmt$(ajusteOC)}</div>
       </div>`;
         }).join('');
     }

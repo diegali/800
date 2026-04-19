@@ -1,21 +1,21 @@
 :root {
-  --bg: #F5F3EE;
+  --bg: #FAF8F2;
   --surface: #FFFFFF;
-  --surface2: #F0EDE6;
-  --border: #D8D3C8;
-  --border2: #C4BFB2;
-  --text: #1A1814;
-  --text2: #6B6560;
-  --text3: #9E9990;
-  --accent: #1A3A2A;
-  --accent-light: #E8F0EB;
-  --accent-mid: #2D6B47;
-  --warn: #7A4B10;
-  --warn-bg: #FDF0DC;
-  --danger: #8B1F1F;
-  --danger-bg: #FDEAEA;
+  --surface2: #F5F2EA;
+  --border: #E2DDD0;
+  --border2: #CEC8B8;
+  --text: #0D0D0D;
+  --text2: #5A5650;
+  --text3: #9A9590;
+  --accent: #0D0D0D;
+  --accent-light: #FEF3D0;
+  --accent-mid: #C9A84C;
+  --warn: #7A5C00;
+  --warn-bg: #FEF3D0;
+  --danger: #9B2C2C;
+  --danger-bg: #FDE8E8;
   --ok: #1A5C2E;
-  --ok-bg: #E6F4EB;
+  --ok-bg: #F0FBF4;
   --info: #1A3A6B;
   --info-bg: #E6EEFA;
   --mono: 'IBM Plex Mono', monospace;
@@ -89,7 +89,7 @@ body {
   border-left: 2px solid transparent;
 }
 .nav-item:hover { color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.06); }
-.nav-item.active { color: #fff; background: rgba(255,255,255,0.1); border-left-color: #7EC8A0; font-weight: 500; }
+.nav-item.active { color: #0D0D0D; background: #C9A84C; border-left-color: #C9A84C; font-weight: 500; }
 .nav-item .icon { font-size: 14px; width: 18px; text-align: center; }
 
 .nav-section {
@@ -107,8 +107,8 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  overflow-x: hidden;
 }
-
 /* Ocultar la app hasta que Firebase confirme el usuario */
 body.app-cargando #pantalla-app { display: none !important; }
 body.app-cargando #pantalla-login { display: flex !important; }

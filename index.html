@@ -54,14 +54,14 @@
                         <span class="icon">⊕</span> Modificaciones
                     </button>
                     <div class="nav-section">Cálculo</div>
+                    <button class="nav-item" onclick="navigate('iop')">
+                        <span class="icon">↗</span> Índices IOP
+                    </button>
                     <button class="nav-item" onclick="navigate('plan')">
                         <span class="icon">▦</span> Plan de avance
                     </button>
                     <button class="nav-item" onclick="navigate('real')">
                         <span class="icon">✓</span> Avance real
-                    </button>
-                    <button class="nav-item" onclick="navigate('iop')">
-                        <span class="icon">↗</span> Índices IOP
                     </button>
                     <button class="nav-item" onclick="navigate('adecuaciones')">
                         <span class="icon">≡</span> Adecuaciones
@@ -79,7 +79,6 @@
                         <div class="topbar-sub" id="topbar-sub">Edificio Municipal — Córdoba Capital</div>
                     </div>
                     <div class="topbar-actions">
-                        <span id="iop-status-pill" class="tag tag-warn">IOP acum. +6.4% — falta +3.6%</span>
                         <button class="btn btn-sm" onclick="openModal('modal-nueva-obra')">+ Nueva obra</button>
                     </div>
                 </div>
@@ -94,25 +93,25 @@
                             <button class="btn btn-sm" onclick="abrirEditarObra()">✏️ Editar obra</button>
                         </div>
                         <div class="grid4" style="margin-bottom:16px">
-                            <div class="metric">
+                            <div class="metric" style="background:#F5F2EA;border-left:3px solid var(--border2)">
                                 <div class="metric-label">Contrato original</div>
-                                <div class="metric-val num" id="r-contrato">$2.840.000</div>
-                                <div class="metric-sub">6 ítems</div>
+                                <div class="metric-val num" id="r-contrato">—</div>
+                                <div class="metric-sub" id="r-contrato-sub"></div>
                             </div>
-                            <div class="metric">
-                                <div class="metric-label">Monto vigente</div>
-                                <div class="metric-val num" id="r-vigente">$2.671.000</div>
-                                <div class="metric-sub">2 modificaciones</div>
+                            <div class="metric" style="background:#FEF3D0;border-left:3px solid #C9A84C">
+                                <div class="metric-label" style="color:#7A5C00">Nuevo monto de contrato</div>
+                                <div class="metric-val num" id="r-vigente">—</div>
+                                <div class="metric-sub" id="r-vigente-sub"></div>
                             </div>
-                            <div class="metric">
-                                <div class="metric-label">Total adecuado</div>
-                                <div class="metric-val num" id="r-adecuado">$318.450</div>
-                                <div class="metric-sub">4 adecuaciones</div>
+                            <div class="metric" style="background:#F0FBF4;border-left:3px solid #52B88A">
+                                <div class="metric-label" style="color:#1A5C2E">Ajuste OC acumulado</div>
+                                <div class="metric-val num" id="r-adecuado">—</div>
+                                <div class="metric-sub" id="r-adecuado-sub"></div>
                             </div>
-                            <div class="metric">
-                                <div class="metric-label">Avance real</div>
-                                <div class="metric-val num">68.2%</div>
-                                <div class="metric-sub">Ponderado sobre contrato</div>
+                            <div class="metric" style="background:#E6EEFA;border-left:3px solid #5B82C8">
+                                <div class="metric-label" style="color:#1A3A6B">Saldo a integrar — definitiva</div>
+                                <div class="metric-val num" id="r-saldo">—</div>
+                                <div class="metric-sub" id="r-saldo-sub"></div>
                             </div>
                         </div>
 
@@ -140,26 +139,17 @@
 
                     <!-- ═══ ITEMS Y ESTRUCTURA ═══ -->
                     <div id="screen-estructura" class="screen">
-                        <div class="screen-header">
-                            <h2>Ítems y Estructura de Costos</h2>
-                            <div class="total-oferta-container"
-                                style="margin-bottom: 20px; font-size: 1.2rem; font-weight: bold;">
-                                Total Oferta: <span id="total-oferta-items">$ 0,00</span>
-                            </div>
-                            <div class="actions">
-                                <button class="btn" onclick="descargarPlantilla()">Descargar Plantilla</button>
-                                <button class="btn btn-primary"
-                                    onclick="document.getElementById('import-excel').click()">Importar Excel</button>
-                                <input type="file" id="import-excel" hidden accept=".xlsx, .xls">
-                            </div>
-                        </div>
                         <div class="card">
                             <div class="card-header">
                                 <div>
                                     <div class="card-title">Oferta de la obra</div>
                                     <div class="card-sub">Ítems con unidad, cantidad y precio unitario</div>
                                 </div>
-                                <div style="display:flex;gap:8px">
+                                <div style="display:flex;gap:8px;align-items:center">
+                                    <div class="total-oferta-container"
+                                        style="font-size:1rem;font-weight:bold;margin-right:8px">
+                                        Total: <span id="total-oferta-items">$ 0,00</span>
+                                    </div>
                                     <button class="btn" onclick="descargarPlantillaPresupuesto()">⬇ Plantilla
                                         oferta</button>
                                     <label class="btn btn-primary" style="cursor:pointer">
@@ -167,20 +157,25 @@
                                         <input type="file" accept=".xlsx" style="display:none"
                                             onchange="importarPresupuesto(this)">
                                     </label>
+                                    <label class="btn" style="cursor:pointer">
+                                        ⬆ Importar oficial
+                                        <input type="file" accept=".xlsx" style="display:none"
+                                            onchange="importarOficialExcel(this)">
+                                    </label>
                                 </div>
                             </div>
                             <div class="tbl-wrap">
                                 <table>
                                     <thead>
                                         <tr>
-                                            <th>Ítem</th>
-                                            <th>Unidad</th>
-                                            <th>Cantidad</th>
-                                            <th>Precio unit.</th>
-                                            <th>Total</th>
-                                            <th>Estructura de costos</th>
-                                            <th></th>
-                                            <th style="width: 100px; text-align: right;">% Inc.</th>
+                                            <th style="max-width:220px">Ítem</th>
+                                            <th style="width:60px;text-align:center">Unidad</th>
+                                            <th style="width:80px;text-align:center">Cantidad</th>
+                                            <th style="width:100px;text-align:center">Precio unit.</th>
+                                            <th style="width:100px;text-align:center">Total</th>
+                                            <th style="width:120px;text-align:center">Estructura de costos</th>
+                                            <th style="width:30px"></th>
+                                            <th style="width:80px;text-align:center">% Inc.</th>
                                         </tr>
                                     </thead>
                                     <tbody id="items-tbody"></tbody>
@@ -192,14 +187,21 @@
                                 <div class="empty-sub">Descargá la plantilla, completala y luego importá la oferta</div>
                             </div>
                         </div>
-
                         <div class="card" id="card-estructura-costos" style="display:none">
                             <div class="card-header">
                                 <div>
                                     <div class="card-title">Estructura de costos</div>
                                     <div class="card-sub">Factores de la polinómica por ítem (deben sumar 100%)</div>
                                 </div>
-
+                                <div style="display:flex;gap:8px">
+                                    <button class="btn" onclick="descargarPlantillaPolinomica()">⬇ Plantilla
+                                        polinómica</button>
+                                    <label class="btn btn-primary" style="cursor:pointer">
+                                        ⬆ Importar polinómica
+                                        <input type="file" accept=".xlsx" style="display:none"
+                                            onchange="importarPolinomica(this)">
+                                    </label>
+                                </div>
                             </div>
                             <div id="estructura-resumen" style="padding:12px 0 4px"></div>
                         </div>
@@ -335,53 +337,35 @@
 
                     <!-- ═══ IOP ═══ -->
                     <div id="screen-iop" class="screen">
+                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+                            <button class="btn btn-primary" onclick="document.getElementById('iop-file').click()">↑
+                                Importar Excel IOP</button>
+                            <input type="file" id="iop-file" accept=".xlsx" style="display:none"
+                                onchange="importarIOP()" />
+                            <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+                                <label style="font-size:12px;color:var(--text2);font-weight:500">Gatillo</label>
+                                <input type="number" id="gatillo-val" value="10" min="1" max="50" onchange="recalcIOP()"
+                                    style="width:64px;text-align:center">
+                                <span style="font-size:12px;color:var(--text2)">%</span>
+                            </div>
+                        </div>
                         <div class="grid-iop">
                             <div class="card">
-                                <div class="card-header">
+                                <div class="card-header" style="margin-bottom:12px">
                                     <div>
                                         <div class="card-title">Índices IOP mensuales</div>
                                         <div class="card-sub">IOP Córdoba</div>
                                     </div>
-
-                                    <div style="display:flex; gap:8px;">
-                                        <button class="btn btn-primary"
-                                            onclick="document.getElementById('iop-file').click()">
-                                            ↑ Importar Excel IOP
-                                        </button>
-                                    </div>
+                                    <div id="iop-resumen-pill"></div>
                                 </div>
-                                <input type="file" id="iop-file" accept=".xlsx" style="display:none"
-                                    onchange="importarIOP()" />
-                                <div class="card-body">
-                                    <div style="
-                                            width: 100%;
-                                            overflow: auto;
-                                            max-height: 65vh;
-                                            border: 1px solid #ddd;
-                                            background: white;
-                                        ">
-                                        <table id="iop-matrix"></table>
-                                    </div>
+                                <div class="tbl-wrap"
+                                    style="max-height:65vh;overflow:auto;border:0.5px solid var(--border);border-radius:var(--radius)">
+                                    <table id="iop-matrix"></table>
                                 </div>
                             </div>
-
                             <div>
                                 <div class="card">
-                                    <div class="card-title" style="margin-bottom:14px">Parámetros del gatillo</div>
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label>Gatillo (%)</label>
-                                            <input type="number" id="gatillo-val" value="10" min="1" max="50"
-                                                onchange="recalcIOP()">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Período base inicial</label>
-                                            <select id="gatillo-base" onchange="recalcIOP()"></select>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="card">
-                                    <div class="card-title" style="margin-bottom:14px">Estado actual del gatillo</div>
+                                    <div class="card-title" style="margin-bottom:14px">Estado IOP</div>
                                     <div id="iop-estado-cards"></div>
                                 </div>
                             </div>
@@ -390,7 +374,6 @@
 
                     <!-- ═══ ADECUACIONES ═══ -->
                     <div id="screen-adecuaciones" class="screen">
-
                         <div class="card" style="margin-bottom:16px">
                             <div class="card-header">
                                 <div>
@@ -398,33 +381,32 @@
                                     <div class="card-sub">Variación IOP acumulada desde la base activa</div>
                                 </div>
                             </div>
-                            <div id="adec-gatillo-container"></div>
+                            <div class="tbl-wrap">
+                                <div id="adec-gatillo-container"></div>
+                            </div>
                             <div id="adec-gatillo-empty" class="empty" style="display:none">
                                 <div class="empty-sub">Sin índices IOP cargados o sin base definida</div>
                             </div>
                         </div>
-
                         <div class="card">
                             <div class="card-header">
                                 <div>
                                     <div class="card-title">Control de adecuaciones</div>
                                     <div class="card-sub">Condiciones de procedencia por período</div>
                                 </div>
-                                <button class="btn btn-primary" onclick="calcularAdecuacion()">Calcular nueva
-                                    adecuación</button>
                             </div>
                             <div class="tbl-wrap">
                                 <table>
                                     <thead>
                                         <tr>
-                                            <th>Período</th>
-                                            <th>IOP base</th>
-                                            <th>IOP actual</th>
-                                            <th>Variación</th>
-                                            <th>Gatillo</th>
-                                            <th>Empresa pidió</th>
-                                            <th>Procede</th>
-                                            <th>Monto</th>
+                                            <th style="text-align:center">Período</th>
+                                            <th style="text-align:center">IOP base</th>
+                                            <th style="text-align:center">IOP actual</th>
+                                            <th style="text-align:center">Variación</th>
+                                            <th style="text-align:center">Gatillo</th>
+                                            <th style="text-align:center">Pedida</th>
+                                            <th style="text-align:center">Procede</th>
+                                            <th style="text-align:right;padding-right:15px">Ajuste OC</th>
                                             <th></th>
                                         </tr>
                                     </thead>
@@ -437,7 +419,6 @@
                                 <div class="empty-sub">Cargá los índices IOP y el avance real para calcular</div>
                             </div>
                         </div>
-
                         <div id="adec-detalle-section" style="display:none">
                             <div class="card">
                                 <div class="card-header">
@@ -453,14 +434,16 @@
                                     <table>
                                         <thead>
                                             <tr>
-                                                <th>Ítem</th>
-                                                <th>Precio vigente</th>
-                                                <th>Rem. teórico</th>
-                                                <th>Rem. real</th>
-                                                <th>Rem. aplicado</th>
-                                                <th>Factor IOP</th>
-                                                <th>Adecuación</th>
-                                                <th>Nota</th>
+                                                <th style="text-align:center">Ítem</th>
+                                                <th style="text-align:center">Precio vigente</th>
+                                                <th style="text-align:center">Rem. teórico</th>
+                                                <th style="text-align:center">Rem. real</th>
+                                                <th style="text-align:center">Rem. aplicado</th>
+                                                <th style="text-align:center">Factor IOP</th>
+                                                <th style="text-align:center">Monto redeterminado</th>
+                                                <th style="text-align:center">Ajuste OC</th>
+                                                <th style="text-align:center">Saldo reintegro</th>
+                                                <th style="text-align:center">Nota</th>
                                             </tr>
                                         </thead>
                                         <tbody id="adec-detalle-tbody"></tbody>
@@ -509,7 +492,7 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Fecha de apertura</label>
-                        <input type="month" id="obra-fecha-apertura" placeholder="YYYY-MM">
+                        <input type="month" id="obra-fecha-apertura">
                     </div>
                     <div class="form-group">
                         <label>Fecha de contrato</label>
@@ -519,16 +502,25 @@
                         <label>Fecha de replanteo</label>
                         <input type="month" id="obra-fecha-replanteo">
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Duración de la obra (días)</label>
-                            <input type="number" id="obra-duracion-dias" min="1" placeholder="Ej: 365">
-                        </div>
-
-                        <div class="form-group">
-                            <label>Meses estimados</label>
-                            <input type="text" id="obra-duracion-meses" disabled>
-                        </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Duración de la obra (días)</label>
+                        <input type="number" id="obra-duracion-dias" min="1" placeholder="Ej: 365">
+                    </div>
+                    <div class="form-group">
+                        <label>Meses estimados</label>
+                        <input type="text" id="obra-duracion-meses" disabled>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Anticipo financiero (%)</label>
+                        <input type="number" id="obra-anticipo-pct" min="0" max="100" placeholder="Ej: 25">
+                    </div>
+                    <div class="form-group">
+                        <label>Período de anticipo</label>
+                        <input type="month" id="obra-anticipo-periodo">
                     </div>
                 </div>
             </div>
@@ -585,6 +577,16 @@
                     <div class="form-group">
                         <label>Meses estimados</label>
                         <input type="text" id="edit-obra-duracion-meses" disabled>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Anticipo financiero (%)</label>
+                        <input type="number" id="edit-obra-anticipo-pct" min="0" max="100" placeholder="Ej: 25">
+                    </div>
+                    <div class="form-group">
+                        <label>Período de anticipo</label>
+                        <input type="month" id="edit-obra-anticipo-periodo">
                     </div>
                 </div>
             </div>
@@ -748,16 +750,18 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>¿La empresa pidió la adecuación?</label>
-                        <select id="adec-empresa-pidio">
+                        <select id="adec-empresa-pidio" onchange="updateAdecModalInfo()">
                             <option value="no">No</option>
                             <option value="si">Sí</option>
                         </select>
                     </div>
                 </div>
+                <div id="adec-modal-resultado" style="margin:8px 0"></div>
             </div>
             <div class="modal-foot">
                 <button class="btn" onclick="closeModal('modal-nueva-adec')">Cancelar</button>
-                <button class="btn btn-primary" onclick="guardarAdecuacion()">Calcular y guardar</button>
+                <button class="btn btn-primary" onclick="guardarAdecuacion()">Calcular y
+                    guardar</button>
             </div>
         </div>
     </div>
