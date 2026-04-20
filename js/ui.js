@@ -36,7 +36,7 @@ function navigate(screen) {
 
 function renderScreen(screen) {
     if (screen === 'resumen') renderResumen();
-    if (screen === 'estructura') renderItems();
+    if (screen === 'estructura') { renderItems(); renderOficial(); }
     if (screen === 'versiones') renderVersiones();
     if (screen === 'plan') renderPlanScreen();
     if (screen === 'real') renderRealScreen();

@@ -8,9 +8,15 @@ function calcularEstadoGatillo() {
 
     let periodos = Object.keys(window.iopGlobal || {}).sort();
     if (apertura) periodos = periodos.filter(p => p >= apertura);
-    if (!periodos.length) return [];
-
     const todos = Object.keys(window.iopGlobal || {}).sort();
+    // Agregar un período extra al final (su VRI usa el último mes de IOP como periodoCalculo)
+    if (periodos.length) {
+        const ultimo = periodos[periodos.length - 1];
+        const [anio, mes] = ultimo.split('-').map(Number);
+        const siguienteMes = mes === 12 ? `${anio + 1}-01` : `${anio}-${String(mes + 1).padStart(2, '0')}`;
+        periodos.push(siguienteMes);
+        if (!todos.includes(siguienteMes)) todos.push(siguienteMes);
+    }
     const idxPrimero = todos.indexOf(periodos[0]);
     let baseIndex = idxPrimero > 0 ? todos[idxPrimero - 1] : periodos[0];
 

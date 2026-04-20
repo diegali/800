@@ -259,59 +259,20 @@
 
                     <!-- ═══ MODIFICACIONES ═══ -->
                     <div id="screen-versiones" class="screen">
-                        <div class="alert alert-info">
-                            ℹ Las modificaciones de obra crean nuevas versiones de cantidad por ítem con fecha de
-                            inicio.
-                            Los cálculos
-                            históricos no se modifican.
-                        </div>
                         <div class="card">
                             <div class="card-header">
                                 <div>
                                     <div class="card-title">Modificaciones de obra</div>
-                                    <div class="card-sub">Economías y demasías</div>
+                                    <div class="card-sub">Economías, demasías e ítems nuevos</div>
                                 </div>
-                                <button class="btn btn-primary" onclick="openModal('modal-nueva-version')">+ Nueva
+                                <button class="btn btn-primary" onclick="nuevaModificacion()">+ Nueva
                                     modificación</button>
                             </div>
-                            <div class="tbl-wrap">
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Fecha</th>
-                                            <th>Ítem</th>
-                                            <th>Cantidad anterior</th>
-                                            <th>Cantidad nueva</th>
-                                            <th>Diferencia</th>
-                                            <th>Tipo</th>
-                                            <th></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="versiones-tbody"></tbody>
-                                </table>
-                            </div>
-                            <div id="versiones-empty" class="empty">
+                            <div id="mods-list"></div>
+                            <div id="mods-empty" class="empty">
                                 <div class="empty-icon">⊕</div>
                                 <div class="empty-title">Sin modificaciones</div>
-                                <div class="empty-sub">Las economías y demasías aparecerán aquí</div>
-                            </div>
-                        </div>
-
-                        <div class="card">
-                            <div class="card-header">
-                                <div>
-                                    <div class="card-title">Modificaciones del plan de trabajo</div>
-                                    <div class="card-sub">Actualizaciones al plan de avance original</div>
-                                </div>
-                                <button class="btn btn-primary" onclick="openModal('modal-nuevo-plan-mod')">+ Modificar
-                                    plan</button>
-                            </div>
-                            <div id="plan-mods-list">
-                                <div class="empty">
-                                    <div class="empty-icon">▦</div>
-                                    <div class="empty-title">Sin modificaciones de plan</div>
-                                    <div class="empty-sub">Las versiones del plan aparecerán aquí</div>
-                                </div>
+                                <div class="empty-sub">Las modificaciones de obra aparecerán aquí</div>
                             </div>
                         </div>
                     </div>
@@ -665,38 +626,122 @@
     </div>
 
     <!-- Nueva modificación de obra -->
-    <div class="modal-overlay" id="modal-nueva-version">
+    <div class="modal-overlay" id="modal-nueva-mod">
         <div class="modal">
             <div class="modal-head">
                 <div class="modal-title">Nueva modificación de obra</div>
-                <button class="modal-close" onclick="closeModal('modal-nueva-version')">×</button>
+                <button class="modal-close" onclick="closeModal('modal-nueva-mod')">×</button>
             </div>
             <div class="modal-body">
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Ítem afectado</label>
-                        <select id="mod-item-select"></select>
+                        <label>Nombre</label>
+                        <input type="text" id="mod-nombre" placeholder="Ej: Modificación N°1">
                     </div>
                     <div class="form-group">
-                        <label>Fecha desde (período)</label>
-                        <input type="month" id="mod-fecha">
+                        <label>Período de aplicación</label>
+                        <input type="month" id="mod-periodo">
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Cantidad nueva</label>
-                        <input type="number" id="mod-cantidad" step="any" placeholder="0">
-                    </div>
-                    <div class="form-group">
-                        <label>Motivo</label>
-                        <input type="text" id="mod-motivo" placeholder="Ej: Economía por supresión de rubro">
-                    </div>
-                </div>
-                <div id="mod-diferencia-info" style="margin-top:8px"></div>
             </div>
             <div class="modal-foot">
-                <button class="btn" onclick="closeModal('modal-nueva-version')">Cancelar</button>
-                <button class="btn btn-primary" onclick="guardarVersion()">Guardar modificación</button>
+                <button class="btn" onclick="closeModal('modal-nueva-mod')">Cancelar</button>
+                <button class="btn btn-primary" onclick="crearModificacion()">Crear</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-detalle-mod">
+        <div class="modal" style="max-width:800px;width:95%">
+            <div class="modal-head">
+                <div class="modal-title" id="modal-detalle-mod-title">Modificación</div>
+                <button class="modal-close" onclick="closeModal('modal-detalle-mod')">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Agregar ítem a la modificación -->
+                <div class="card" style="margin-bottom:12px">
+                    <div class="card-header">
+                        <div class="card-title" style="font-size:13px">Agregar cambio</div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Tipo</label>
+                            <select id="mod-item-tipo" onchange="toggleModItemTipo()">
+                                <option value="existente">Ítem existente (demasía/economía)</option>
+                                <option value="nuevo">Ítem nuevo</option>
+                            </select>
+                        </div>
+                    </div>
+                    <!-- Existente -->
+                    <div id="mod-item-existente-fields">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Ítem</label>
+                                <select id="mod-item-base-select"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Cantidad a agregar/quitar</label>
+                                <input type="number" id="mod-item-delta" step="any"
+                                    placeholder="+ demasía / − economía">
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Nuevo ítem -->
+                    <div id="mod-item-nuevo-fields" style="display:none">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Nombre</label>
+                                <input type="text" id="mod-item-nuevo-nombre" placeholder="Descripción del ítem">
+                            </div>
+                            <div class="form-group">
+                                <label>Unidad</label>
+                                <input type="text" id="mod-item-nuevo-unidad" placeholder="m², gl, etc.">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Cantidad</label>
+                                <input type="number" id="mod-item-nuevo-cantidad" step="any" placeholder="0">
+                            </div>
+                            <div class="form-group">
+                                <label>Precio oferta</label>
+                                <input type="number" id="mod-item-nuevo-precio" step="any" placeholder="0">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-foot" style="padding:8px 0 0 0">
+                        <button class="btn btn-primary" onclick="agregarItemMod()">+ Agregar</button>
+                    </div>
+                </div>
+                <!-- Tabla de ítems de la modificación -->
+                <div class="tbl-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ítem</th>
+                                <th>Unidad</th>
+                                <th>Cant. original</th>
+                                <th>Cambio</th>
+                                <th>Cant. resultante</th>
+                                <th>Precio</th>
+                                <th>Tipo</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="mod-detalle-tbody"></tbody>
+                    </table>
+                </div>
+                <div id="mod-detalle-empty" class="empty" style="display:none">
+                    <div class="empty-sub">Sin ítems en esta modificación</div>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeModal('modal-detalle-mod');renderVersiones()">Cerrar</button>
+                <label class="btn btn-secondary" style="cursor:pointer">
+                    📥 Importar plan
+                    <input type="file" accept=".xlsx,.xls" style="display:none" onchange="handlePlanModExcel(event)">
+                </label>
+                <button class="btn btn-danger" onclick="eliminarModificacion()">Eliminar modificación</button>
             </div>
         </div>
     </div>

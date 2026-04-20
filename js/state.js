@@ -9,7 +9,7 @@ function obraVacia() {
         id: Date.now(),
         fechaCreacion: new Date().toISOString().slice(0, 7),
         obra: { nombre: '', expediente: '', fecha: '', fechaApertura: '', contratista: '' },
-        items: [], versiones: [], plan: [], real: [], adecuaciones: [],
+        items: [], modificaciones: [], planMod: [], plan: [], real: [], adecuaciones: [],
         gatillo: 10, iopBase: null, nextId: 1
     };
 }
@@ -68,6 +68,8 @@ async function crearNuevaObra(datosObra) {
     if (typeof renderTopbarObra === 'function') renderTopbarObra();
     if (typeof renderResumen === 'function') renderResumen();
     if (typeof closeModal === 'function') closeModal('modal-nueva-obra');
+    if (typeof renderOficial === 'function') renderOficial();
+    if (typeof actualizarCardEstructura === 'function') actualizarCardEstructura();
 
     return nueva;
 }
@@ -144,6 +146,8 @@ async function descargarTodoDeNube() {
         }
 
         if (state) {
+            if (!state.modificaciones) state.modificaciones = [];
+            if (!state.planMod) state.planMod = [];
             window.state = state;
             setObraActivaId(state.id);
         } else {

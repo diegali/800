@@ -127,7 +127,7 @@ function importarOficialExcel(input) {
                 if (!confirm(`Se reemplazarán los ${state.items.length} ítems actuales. ¿Continuás?`)) return;
             }
             const idsViejos = state.items.map(i => i.id);
-            state.versiones = state.versiones.filter(v => !idsViejos.includes(v.itemId));
+            // modificaciones se conservan al reimportar
             state.plan = state.plan.filter(p => !idsViejos.includes(p.itemId));
             state.real = state.real.filter(r => !idsViejos.includes(r.itemId));
             state.adecuaciones = [];
@@ -135,7 +135,6 @@ function importarOficialExcel(input) {
             save();
             renderOficial();
             renderItems();
-            renderOficial();
             actualizarCardEstructura();
             alert(`✓ ${nuevos.length} ítems importados del presupuesto oficial.`);
         } catch (err) {
@@ -152,6 +151,8 @@ function renderOficial() {
     if (!state.items.length) {
         tbody.innerHTML = '';
         empty.style.display = 'block';
+        const totalOficialEl = document.getElementById('total-oficial-items');
+        if (totalOficialEl) totalOficialEl.textContent = fmt$(0);
         return;
     }
     empty.style.display = 'none';
@@ -376,7 +377,10 @@ function guardarItem() {
 function eliminarItem(id) {
     if (!confirm('¿Eliminás este ítem y todos sus datos asociados?')) return;
     state.items = state.items.filter(i => i.id !== id);
-    state.versiones = state.versiones.filter(v => v.itemId !== id);
+    // eliminar cambios de este ítem en todas las modificaciones
+    state.modificaciones.forEach(mod => {
+        mod.items = (mod.items || []).filter(i => i.itemIdBase !== id);
+    });
     state.plan = state.plan.filter(p => p.itemId !== id);
     state.real = state.real.filter(r => r.itemId !== id);
     save();
@@ -559,7 +563,7 @@ function importarItemsExcel(input) {
 
             // Limpiar datos dependientes de ítems anteriores
             const idsViejos = state.items.map(i => i.id);
-            state.versiones = state.versiones.filter(v => !idsViejos.includes(v.itemId));
+            // modificaciones se conservan al reimportar
             state.plan = state.plan.filter(p => !idsViejos.includes(p.itemId));
             state.real = state.real.filter(r => !idsViejos.includes(r.itemId));
 

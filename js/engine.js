@@ -24,10 +24,19 @@ function periodoLabel(p) {
 function cantidadVigente(itemId, periodo) {
     const item = state.items.find(i => i.id === itemId);
     if (!item) return 0;
-    const vers = state.versiones
-        .filter(v => v.itemId === itemId && v.fecha <= periodo)
-        .sort((a, b) => b.fecha.localeCompare(a.fecha));
-    return vers.length ? vers[0].cantidad : item.cantidad;
+    // Buscar en todas las modificaciones los cambios que afectan este ítem
+    const cambios = [];
+    (state.modificaciones || []).forEach(mod => {
+        const cambio = (mod.items || []).find(i => i.itemIdBase === itemId);
+        if (cambio && mod.periodo <= periodo) {
+            cambios.push({ periodo: mod.periodo, cantidad: cambio.cantidad });
+        }
+    });
+    if (!cambios.length) return item.cantidad;
+    cambios.sort((a, b) => b.periodo.localeCompare(a.periodo));
+    // La cantidad vigente es la original más la suma de todos los cambios aplicados
+    const totalCambios = cambios.reduce((s, c) => s + c.cantidad, 0);
+    return Math.round((item.cantidad + totalCambios) * 10000) / 10000;
 }
 
 function acumPlan(itemId, hasta) {
