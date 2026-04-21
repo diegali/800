@@ -241,15 +241,18 @@ function renderAdecuaciones() {
         const gatillo = state.gatillo || 10;
         const tieneMods = (state.modificaciones || []).length > 0;
         const tieneDetalleMod = (a.detalleMod || []).length > 0;
+        const ajusteOCBase = a.procede ? (a.detalle || []).reduce((s, d) => s + (d.ajusteOC ?? 0), 0) : null;
+        const ajusteOCMod = a.procede && tieneDetalleMod ? (a.detalleMod || []).reduce((s, d) => s + (d.ajusteOC ?? 0), 0) : null;
+        const ajusteOCTotal = ajusteOCBase !== null ? ajusteOCBase + (ajusteOCMod ?? 0) : null;
         return `<tr>
-          <td style="text-align:center">${periodoLabel(a.periodo)}</td>
-          <td style="text-align:center">${a.basePeriodo ? periodoLabel(a.basePeriodo) : '—'}</td>
           <td style="text-align:center">${periodoLabel(a.periodo)}</td>
           <td style="text-align:center" class="${varPct >= gatillo ? 'text-ok fw6' : 'text-warn'}">${varPct >= 0 ? '+' : ''}${varPct.toFixed(2)}%</td>
           <td style="text-align:center"><span class="tag ${varPct >= gatillo ? 'tag-ok' : 'tag-no'}">${varPct >= gatillo ? 'Sí' : 'No'}</span></td>
           <td style="text-align:center"><span class="tag ${a.empresaPidio === 'si' ? 'tag-ok' : 'tag-no'}">${a.empresaPidio === 'si' ? 'Sí' : 'No'}</span></td>
           <td style="text-align:center"><span class="tag ${a.procede ? 'tag-ok' : 'tag-no'}">${a.procede ? 'Procede' : 'No procede'}</span></td>
-          <td class="num fw6">${a.procede ? fmt$(a.total - (a.detalle || []).reduce((s, d) => s + (d.saldoReintegro ?? 0), 0)) : '—'}</td>
+          <td class="num fw6">${ajusteOCBase !== null ? fmt$(ajusteOCBase) : '—'}</td>
+          <td class="num fw6">${ajusteOCMod !== null ? fmt$(ajusteOCMod) : '—'}</td>
+          <td class="num fw6">${ajusteOCTotal !== null ? fmt$(ajusteOCTotal) : '—'}</td>
           <td style="display:flex;gap:4px;justify-content:flex-end">
             <button class="btn btn-sm" onclick="mostrarDetalle(${idx})">Ver</button>
             ${a.procede && tieneMods ? `<button class="btn btn-sm ${tieneDetalleMod ? '' : 'btn-primary'}" onclick="recalcularConMod('${a.periodo}')">

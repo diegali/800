@@ -84,8 +84,8 @@ function renderSelectorObras() {
         return `<button onclick="seleccionarObra(${o.id})" style="
             width:100%;text-align:left;padding:6px 8px;margin-bottom:2px;border-radius:6px;
             border:none;cursor:pointer;font-size:12px;line-height:1.3;
-            background:${activa ? 'var(--accent)' : 'transparent'};
-            color:${activa ? 'white' : 'var(--text-1)'};
+            background:${activa ? 'var(--accent-mid)' : 'transparent'};
+            color:${activa ? '#0D0D0D' : 'rgba(255,255,255,0.6)'};
             font-family:var(--sans)">
             <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${o.obra.nombre || 'Sin nombre'}</div>
             <div style="font-size:10px;opacity:0.75">${o.obra.expediente || 'Sin expediente'}</div>

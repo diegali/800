@@ -174,9 +174,32 @@ async function descargarTodoDeNube() {
 
 window.addEventListener('load', () => {
     if (window.auth) {
-        window.auth.onAuthStateChanged((user) => {
-            if (user) descargarTodoDeNube();
-            else {
+        window.auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                // Verificar licencia
+                try {
+                    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+                    const licRef = doc(window.db, 'licencias', user.uid);
+                    const licSnap = await getDoc(licRef);
+                    if (!licSnap.exists()) {
+                        mostrarPantallaLicencia('Sin licencia activa. Contactá al administrador.');
+                        return;
+                    }
+                    const lic = licSnap.data();
+                    if (!lic.activa) {
+                        mostrarPantallaLicencia('Tu licencia está inactiva. Contactá al administrador.');
+                        return;
+                    }
+                    if (lic.vencimiento && lic.vencimiento < new Date().toISOString().slice(0, 10)) {
+                        mostrarPantallaLicencia(`Tu licencia venció el ${lic.vencimiento}. Contactá al administrador.`);
+                        return;
+                    }
+                    descargarTodoDeNube();
+                } catch (e) {
+                    console.error('Error verificando licencia:', e);
+                    mostrarPantallaLicencia('Error al verificar licencia. Contactá al administrador.');
+                }
+            } else {
                 obras = [];
                 window.obras = [];
                 window.iopGlobal = {};
@@ -187,3 +210,24 @@ window.addEventListener('load', () => {
         });
     }
 });
+
+function mostrarPantallaLicencia(mensaje) {
+    document.body.classList.remove('app-cargando');
+    document.getElementById('pantalla-app').style.display = 'none';
+    document.getElementById('pantalla-login').style.display = 'none';
+    let el = document.getElementById('pantalla-licencia');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'pantalla-licencia';
+        el.style.cssText = 'position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:9999';
+        el.innerHTML = `
+            <div style="font-size:32px">🔒</div>
+            <div style="font-size:18px;font-weight:600;color:var(--text)">Acceso restringido</div>
+            <div id="licencia-mensaje" style="font-size:14px;color:var(--text2);text-align:center;max-width:320px"></div>
+            <button class="btn btn-primary" onclick="window.auth.signOut()">Cerrar sesión</button>
+        `;
+        document.body.appendChild(el);
+    }
+    document.getElementById('licencia-mensaje').textContent = mensaje;
+    el.style.display = 'flex';
+}
