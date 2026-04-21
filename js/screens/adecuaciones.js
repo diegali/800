@@ -140,6 +140,67 @@ function renderGatillo() {
         </div>`;
 }
 
+function calcularDetalleMod(periodo, periodoCalculo, basePeriodo, factorGlobal, adecAnterior, procede, decreto1082, anticipo) {
+    const FAP = 0.95;
+    let totalMod = 0;
+    const detalleMod = [];
+    const modsAplicadas = state.modificaciones || [];
+
+    for (const mod of modsAplicadas) {
+        for (const itemMod of (mod.items || [])) {
+            const detalleAnteriorMod = adecAnterior?.detalleMod?.find(
+                d => d.modId === mod.id && d.itemId === itemMod.id
+            );
+            const precioBase = detalleAnteriorMod?.precioRedeterminado ?? itemMod.precio;
+            const rem = remanenteMod(mod, itemMod, periodoCalculo || periodo);
+            if (decreto1082 && (rem.nota === 'penalizado' || rem.nota === 'teorico-menor')) {
+                rem.aplicado = rem.real;
+                rem.nota = 'decreto1082';
+            }
+            const itemBase = state.items.find(i => i.id === itemMod.itemIdBase);
+            const factorItem = (periodoCalculo && basePeriodo && itemBase)
+                ? getFactorItem(itemBase, periodoCalculo, basePeriodo)
+                : getFactorItem(itemMod, periodoCalculo, basePeriodo) || factorGlobal;
+            const factor = factorItem !== null ? factorItem : factorGlobal;
+            const cv = itemMod.cantidad;
+            const precioVigente = cv * precioBase;
+            let adecuacion = 0, ajusteOC = 0, saldoReintegro = 0;
+            let precioRedeterminado = precioBase, precioProvisorio = precioBase;
+            const aplicarAnticipoMod = anticipo > 0 && state.obra.anticipoPeriodo && periodo > state.obra.anticipoPeriodo && itemMod.cantidad < 0;
+            if (procede) {
+                const factorRedondeado = Math.round(factor * 10000) / 10000;
+                const variacion = Math.round((factorRedondeado - 1) * 10000) / 10000;
+                const tieneDecimal4Cero = Math.round(factor * 10000) % 10 === 0;
+                const factorParaFP = (detalleAnteriorMod && tieneDecimal4Cero) ? factor : factorRedondeado;
+                const factorProvisorio = detalleAnteriorMod
+                    ? Math.round((1 + (factorParaFP - 1) * FAP) * 10000) / 10000
+                    : 1 + Math.round(Math.round((factor - 1) * 10000) / 10000 * FAP * 10000) / 10000;
+                adecuacion = Math.round(precioVigente * rem.aplicado * variacion * 10000) / 10000;
+                if (aplicarAnticipoMod) {
+                    precioRedeterminado = Math.round((precioBase * anticipo + precioBase * factorRedondeado * (1 - anticipo)) * 10000) / 10000;
+                    precioProvisorio = Math.round((precioBase * anticipo + precioBase * factorProvisorio * (1 - anticipo)) * 10000) / 10000;
+                    adecuacion = Math.round(adecuacion * (1 - anticipo) * 10000) / 10000;
+                } else {
+                    precioRedeterminado = Math.round(Math.round(precioBase * 10000) * Math.round(factorRedondeado * 10000) / 10000) / 10000;
+                    precioProvisorio = Math.round(Math.round(precioBase * 10000) * Math.round(factorProvisorio * 10000) / 10000) / 10000;
+                }
+                const precioProvAnterior = detalleAnteriorMod?.precioProvisorio ?? itemMod.precio;
+                ajusteOC = Math.round(cv * rem.aplicado * (precioProvisorio - precioProvAnterior) * 10000) / 10000;
+                saldoReintegro = Math.round((adecuacion - ajusteOC) * 10000) / 10000;
+            }
+            totalMod += adecuacion;
+            detalleMod.push({
+                modId: mod.id, modNombre: mod.nombre,
+                itemId: itemMod.id, nombre: itemMod.nombre,
+                precioVigente, precioRedeterminado, precioProvisorio,
+                remTeorico: rem.teorico, remReal: rem.real, remAplicado: rem.aplicado,
+                nota: rem.nota, factor, adecuacion, ajusteOC, saldoReintegro
+            });
+        }
+    }
+    return { detalleMod, totalMod };
+}
+
 function registrarAdecuacionDirecta(periodo) {
     const empresaPidio = document.getElementById(`empresa-pidio-${periodo}`).value;
     const decreto1082 = document.getElementById(`decreto1082-${periodo}`)?.checked || false;
@@ -541,61 +602,10 @@ function guardarAdecuacion() {
         };
     });
     // ── MODIFICACIONES ──
-    let totalMod = 0;
-    const detalleMod = [];
-    const modsAplicadas = state.modificaciones || [];
-    for (const mod of modsAplicadas) {
-        for (const itemMod of (mod.items || [])) {
-            const detalleAnteriorMod = adecAnterior?.detalleMod?.find(
-                d => d.modId === mod.id && d.itemId === itemMod.id
-            );
-            const precioBase = detalleAnteriorMod?.precioRedeterminado ?? itemMod.precio;
-            const rem = remanenteMod(mod, itemMod, periodoCalculo || periodo);
-            if (decreto1082 && (rem.nota === 'penalizado' || rem.nota === 'teorico-menor')) {
-                rem.aplicado = rem.real;
-                rem.nota = 'decreto1082';
-            }
-            const itemBase = state.items.find(i => i.id === itemMod.itemIdBase);
-            const factorItem = (periodoCalculo && basePeriodo && itemBase)
-                ? getFactorItem(itemBase, periodoCalculo, basePeriodo)
-                : getFactorItem(itemMod, periodoCalculo, basePeriodo) || factorGlobal;
-            const factor = factorItem !== null ? factorItem : factorGlobal;
-            const cv = Math.abs(itemMod.cantidad);
-            const precioVigente = cv * precioBase;
-            let adecuacion = 0, ajusteOC = 0, saldoReintegro = 0;
-            let precioRedeterminado = precioBase, precioProvisorio = precioBase;
-            const aplicarAnticipoMod = anticipo > 0 && state.obra.anticipoPeriodo && periodo > state.obra.anticipoPeriodo && itemMod.cantidad < 0;
-            if (procede) {
-                const factorRedondeado = Math.round(factor * 10000) / 10000;
-                const variacion = Math.round((factorRedondeado - 1) * 10000) / 10000;
-                const tieneDecimal4Cero = Math.round(factor * 10000) % 10 === 0;
-                const factorParaFP = (detalleAnteriorMod && tieneDecimal4Cero) ? factor : factorRedondeado;
-                const factorProvisorio = detalleAnteriorMod
-                    ? Math.round((1 + (factorParaFP - 1) * FAP) * 10000) / 10000
-                    : 1 + Math.round(Math.round((factor - 1) * 10000) / 10000 * FAP * 10000) / 10000;
-                adecuacion = Math.round(precioVigente * rem.aplicado * variacion * 10000) / 10000;
-                if (aplicarAnticipoMod) {
-                    precioRedeterminado = Math.round((precioBase * anticipo + precioBase * factorRedondeado * (1 - anticipo)) * 10000) / 10000;
-                    precioProvisorio = Math.round((precioBase * anticipo + precioBase * factorProvisorio * (1 - anticipo)) * 10000) / 10000;
-                    adecuacion = Math.round(adecuacion * (1 - anticipo) * 10000) / 10000;
-                } else {
-                    precioRedeterminado = Math.round(Math.round(precioBase * 10000) * Math.round(factorRedondeado * 10000) / 10000) / 10000;
-                    precioProvisorio = Math.round(Math.round(precioBase * 10000) * Math.round(factorProvisorio * 10000) / 10000) / 10000;
-                }
-                const precioProvAnterior = detalleAnteriorMod?.precioProvisorio ?? itemMod.precio;
-                ajusteOC = Math.round(cv * rem.aplicado * (precioProvisorio - precioProvAnterior) * 10000) / 10000;
-                saldoReintegro = Math.round((adecuacion - ajusteOC) * 10000) / 10000;
-            }
-            totalMod += adecuacion;
-            detalleMod.push({
-                modId: mod.id, modNombre: mod.nombre,
-                itemId: itemMod.id, nombre: itemMod.nombre,
-                precioVigente, precioRedeterminado, precioProvisorio,
-                remTeorico: rem.teorico, remReal: rem.real, remAplicado: rem.aplicado,
-                nota: rem.nota, factor, adecuacion, ajusteOC, saldoReintegro
-            });
-        }
-    }
+    const { detalleMod, totalMod } = calcularDetalleMod(
+        periodo, periodoCalculo, basePeriodo, factorGlobal,
+        adecAnterior, procede, decreto1082, anticipo
+    );
     state.adecuaciones.push({
         periodo, empresaPidio, decreto1082, superaGatillo, procede,
         iopBase: iopBaseVal, iopActual: iopActualVal, basePeriodo, periodoCalculo,
@@ -752,72 +762,11 @@ function recalcularConMod(periodo) {
         .filter(a => a.procede && a.periodo < periodo)
         .sort((a, b) => b.periodo.localeCompare(a.periodo));
 
-    let totalMod = 0;
-    const detalleMod = [];
-    const modsAplicadas = state.modificaciones || [];
-
-    for (const mod of modsAplicadas) {
-        for (const itemMod of (mod.items || [])) {
-            const adecAnteriorMod = adecsPrevias[0];
-            const detalleAnteriorMod = adecAnteriorMod?.detalleMod?.find(
-                d => d.modId === mod.id && d.itemId === itemMod.id
-            );
-            const precioBase = detalleAnteriorMod?.precioRedeterminado ?? itemMod.precio;
-            const rem = remanenteMod(mod, itemMod, periodoCalculo || periodo);
-
-            if (adec.decreto1082 && (rem.nota === 'penalizado' || rem.nota === 'teorico-menor')) {
-                rem.aplicado = rem.real;
-                rem.nota = 'decreto1082';
-            }
-
-            const itemBase = state.items.find(i => i.id === itemMod.itemIdBase);
-            const factorItem = (periodoCalculo && basePeriodo && itemBase)
-                ? getFactorItem(itemBase, periodoCalculo, basePeriodo)
-                : getFactorItem(itemMod, periodoCalculo, basePeriodo) || factorGlobal;
-            const factor = factorItem !== null ? factorItem : factorGlobal;
-
-            const cv = itemMod.cantidad;
-            const precioVigente = cv * precioBase;
-            let adecuacion = 0, ajusteOC = 0, saldoReintegro = 0;
-            let precioRedeterminado = precioBase, precioProvisorio = precioBase;
-
-            const aplicarAnticipoMod = anticipo > 0 && state.obra.anticipoPeriodo && periodo > state.obra.anticipoPeriodo && itemMod.cantidad < 0;
-
-            if (adec.procede) {
-                const factorRedondeado = Math.round(factor * 10000) / 10000;
-                const variacion = Math.round((factorRedondeado - 1) * 10000) / 10000;
-                const tieneDecimal4Cero = Math.round(factor * 10000) % 10 === 0;
-                const factorParaFP = (detalleAnteriorMod && tieneDecimal4Cero) ? factor : factorRedondeado;
-                const factorProvisorio = detalleAnteriorMod
-                    ? Math.round((1 + (factorParaFP - 1) * FAP) * 10000) / 10000
-                    : 1 + Math.round(Math.round((factor - 1) * 10000) / 10000 * FAP * 10000) / 10000;
-
-                adecuacion = Math.round(precioVigente * rem.aplicado * variacion * 10000) / 10000;
-
-                if (aplicarAnticipoMod) {
-                    precioRedeterminado = Math.round((precioBase * anticipo + precioBase * factorRedondeado * (1 - anticipo)) * 10000) / 10000;
-                    precioProvisorio = Math.round((precioBase * anticipo + precioBase * factorProvisorio * (1 - anticipo)) * 10000) / 10000;
-                    adecuacion = Math.round(adecuacion * (1 - anticipo) * 10000) / 10000;
-                } else {
-                    precioRedeterminado = Math.round(Math.round(precioBase * 10000) * Math.round(factorRedondeado * 10000) / 10000) / 10000;
-                    precioProvisorio = Math.round(Math.round(precioBase * 10000) * Math.round(factorProvisorio * 10000) / 10000) / 10000;
-                }
-
-                const precioProvAnterior = detalleAnteriorMod?.precioProvisorio ?? itemMod.precio;
-                ajusteOC = Math.round(cv * rem.aplicado * (precioProvisorio - precioProvAnterior) * 10000) / 10000;
-                saldoReintegro = Math.round((adecuacion - ajusteOC) * 10000) / 10000;
-            }
-
-            totalMod += adecuacion;
-            detalleMod.push({
-                modId: mod.id, modNombre: mod.nombre,
-                itemId: itemMod.id, nombre: itemMod.nombre,
-                precioVigente, precioRedeterminado, precioProvisorio,
-                remTeorico: rem.teorico, remReal: rem.real, remAplicado: rem.aplicado,
-                nota: rem.nota, factor, adecuacion, ajusteOC, saldoReintegro
-            });
-        }
-    }
+    const adecAnterior = adecsPrevias[0];
+    const { detalleMod, totalMod } = calcularDetalleMod(
+        periodo, periodoCalculo, basePeriodo, factorGlobal,
+        adecAnterior, adec.procede, adec.decreto1082, anticipo
+    );
 
     adec.detalleMod = detalleMod;
     adec.totalMod = totalMod;

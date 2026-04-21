@@ -128,29 +128,26 @@
 .metric {
   background: var(--surface2);
   border-radius: var(--radius);
-  padding: 14px 16px;
+  padding: 10px 12px;
 }
-
 .metric-label {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text2);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: .04em;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
-
 .metric-val {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text);
   font-family: var(--mono);
 }
-
 .metric-sub {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text3);
-  margin-top: 3px;
+  margin-top: 2px;
 }
 
 /* Tables */

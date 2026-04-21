@@ -39,12 +39,17 @@ function renderResumen() {
         adecList.innerHTML = adecs.map((a, idx) => {
             const varPct = ((a.iopActual / a.iopBase - 1) * 100).toFixed(1);
             const ajusteOC = (a.detalle || []).reduce((s, d) => s + (d.ajusteOC ?? 0), 0);
+            const ajusteOCMod = (a.detalleMod || []).reduce((s, d) => s + (d.ajusteOC ?? 0), 0);
+            const ajusteOCTotal = ajusteOC + ajusteOCMod;
+            const tieneMod = (a.detalleMod || []).length > 0;
             return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <span style="font-size:13px;font-weight:500">Adecuación provisoria ${idx + 1}</span>
           <span class="tag tag-ok">Calculada</span>
         </div>
-        <div style="font-size:12px;color:var(--text2);margin-top:2px">${periodoLabel(a.periodo)} · Ajuste OC: ${fmt$(ajusteOC)}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">${periodoLabel(a.periodo)} · Ajuste OC base: ${fmt$(ajusteOC)}</div>
+        ${tieneMod ? `<div style="font-size:12px;color:var(--text2);margin-top:1px">Ajuste OC mod.: ${fmt$(ajusteOCMod)}</div>` : ''}
+        ${tieneMod ? `<div style="font-size:12px;font-weight:600;text-align:right;margin-top:2px;font-family:var(--mono)">Total: ${fmt$(ajusteOCTotal)}</div>` : ''}
       </div>`;
         }).join('');
     }
