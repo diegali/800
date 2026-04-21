@@ -45,12 +45,14 @@ function acumPlan(itemId, hasta) {
         .reduce((s, p) => s + p.cantidad, 0);
 }
 function acumReal(itemId, hasta) {
-    return state.real
-        .filter(r => r.itemId === itemId && r.periodo <= hasta)
-        .reduce((s, r) => s + r.cantidad, 0);
+    const filas = state.real.filter(r => r.itemId === itemId && r.periodo <= hasta);
+    if (itemId === 6) console.log('acumReal id6:', filas);
+    return filas.reduce((s, r) => s + r.cantidad, 0);
 }
+
 function remanente(itemId, periodo) {
-    const cv = cantidadVigente(itemId, periodo);
+    const item = state.items.find(i => i.id === itemId);
+    const cv = item ? item.cantidad : 0;
     if (cv === 0) return { teorico: 0, real: 0, aplicado: 0, nota: 'economia' };
     const ap = acumPlan(itemId, periodo);
     const ar = acumReal(itemId, periodo);
@@ -62,6 +64,7 @@ function remanente(itemId, periodo) {
     else if (real < teorico) nota = 'real-menor';
     else if (teorico < real) nota = 'teorico-menor';
     return { teorico, real, aplicado, nota };
+
 }
 
 function calcIopBase(periodo) {
@@ -81,4 +84,35 @@ function calcIopBase(periodo) {
     }
 
     return state.iopBase || null;
+}
+
+function acumPlanMod(modId, itemId, hasta) {
+    return (state.planMod || [])
+        .filter(p => p.modId === modId && p.itemId === itemId && p.periodo <= hasta)
+        .reduce((s, p) => s + p.cantidad, 0);
+}
+
+function acumRealMod(modId, itemId, hasta) {
+    return (state.realMod || [])
+        .filter(r => r.modId === modId && r.itemId === itemId && r.periodo <= hasta)
+        .reduce((s, r) => s + r.cantidad, 0);
+}
+
+function remanenteMod(mod, itemMod, periodo) {
+    // Economías: remanente siempre 1 (se redeterminan completas)
+    if (itemMod.cantidad < 0) {
+        return { teorico: 1, real: 1, aplicado: 1, nota: 'economia' };
+    }
+    const cv = Math.abs(itemMod.cantidad);
+    if (cv === 0) return { teorico: 0, real: 0, aplicado: 0, nota: 'economia' };
+    const ap = acumPlanMod(mod.id, itemMod.id, periodo);
+    const ar = acumRealMod(mod.id, itemMod.id, periodo);
+    const teorico = Math.max(0, 1 - ap / cv);
+    const real = Math.max(0, 1 - ar / cv);
+    const aplicado = Math.min(teorico, real);
+    let nota = 'ok';
+    if (teorico === 0 && real > 0) nota = 'penalizado';
+    else if (real < teorico) nota = 'real-menor';
+    else if (teorico < real) nota = 'teorico-menor';
+    return { teorico, real, aplicado, nota };
 }

@@ -1,12 +1,16 @@
+Aquí está el contexto actualizado con todos los cambios aplicados en esta sesión:
+
+---
+
 # Redeterminaciones 800/16 — Decreto 1082/17
-## Contexto técnico — v18
+## Contexto técnico — v21
 *Provincia de Córdoba*
 
 ---
 
 ## Inicio rápido
 Al iniciar chat nuevo:
-> *"Leíste el contexto de la app Redeterminaciones 800/16 v18. Quiero continuar el desarrollo. [describí qué querés hacer]"*
+> *"Leíste el contexto de la app Redeterminaciones 800/16 v21. Quiero continuar el desarrollo. [describí qué querés hacer]"*
 
 **Modo de trabajo:** usuario principiante. Solo código listo para copiar/pegar, mínima explicación.
 
@@ -49,9 +53,7 @@ usuarios/{uid}/iop/cordoba        ← { datos: {YYYY-MM: {factor: valor}}, orden
 | `window.state` | Obra activa |
 | `window.obras` | Array de todas las obras del usuario |
 | `window.iopGlobal` | `{YYYY-MM: {factor: valor}}` |
-| `window.iopOrden` | `{nombreFactor: nroOrden}` — se guarda en Firestore junto al IOP |
-
-`state.iop` NO existe — todo el IOP en `window.iopGlobal`.
+| `window.iopOrden` | `{nombreFactor: nroOrden}` |
 
 ---
 
@@ -60,88 +62,151 @@ usuarios/{uid}/iop/cordoba        ← { datos: {YYYY-MM: {factor: valor}}, orden
 id, fechaCreacion
 obra: { nombre, expediente, fecha, fechaApertura, fechaReplanteo, contratista, duracionDias,
         anticipoPct, anticipoPeriodo }
-items[]:      { id, nombre, unidad, cantidad, precio, precioOficial, factores[] }
-versiones[]:  { itemId, fecha(YYYY-MM), cantidad, motivo }
-plan[]:       { itemId, periodo(YYYY-MM), cantidad }
-real[]:       { itemId, periodo(YYYY-MM), cantidad }
-adecuaciones[]: { periodo, empresaPidio, decreto1082, superaGatillo, procede,
-                  iopBase, iopActual, basePeriodo, periodoCalculo,
-                  factor, total, detalle[] }
+items[]:          { id, nombre, unidad, cantidad, precio, precioOficial, factores[] }
+modificaciones[]: ver estructura abajo
+planMod[]:        { modId, itemId, periodo(YYYY-MM), cantidad }
+realMod[]:        { modId, itemId, periodo(YYYY-MM), cantidad }
+plan[]:           { itemId, periodo(YYYY-MM), cantidad }
+real[]:           { itemId, periodo(YYYY-MM), cantidad }
+adecuaciones[]:   { periodo, empresaPidio, decreto1082, superaGatillo, procede,
+                    iopBase, iopActual, basePeriodo, periodoCalculo,
+                    factor, total, detalle[],
+                    detalleMod[], totalMod }
 gatillo: 10
-iopBase: YYYY-MM   ← solo para matriz IOP, NO para calcularEstadoGatillo
+iopBase: YYYY-MM
 nextId: 1
 ```
 
-### Campos de ítem
-- `precio`: precio ofertado — usado en TODOS los cálculos de redeterminación
-- `precioOficial`: precio del presupuesto oficial — usado para ponderadores de polinómica en `getIOPConsolidado`
+⚠️ `state.versiones[]` eliminado — reemplazado por `state.modificaciones[]`
 
-### Anticipo financiero ✅
-- `state.obra.anticipoPct` — porcentaje (ej: `25` → 25%)
-- `state.obra.anticipoPeriodo` — período desde el que aplica (`YYYY-MM`)
-- Se aplica cuando `periodo > anticipoPeriodo` (no `>=`)
-- Afecta: `precioRedeterminado`, `precioProvisorio`, `adecuacion`
-- NO afecta directamente `ajusteOC` — el efecto ya está incorporado en `precioProvisorio`
-
-### detalle[] por ítem — estructura completa ✅
+Compatibilidad:
+```javascript
+if (!state.modificaciones) state.modificaciones = [];
+if (!state.planMod) state.planMod = [];
+if (!state.realMod) state.realMod = [];
 ```
-{
-  itemId, nombre,
-  precioVigente,       ← cv × precioBase
-  precioRedeterminado, ← con anticipo: round(precioBase×anticipo + precioBase×factorRedondeado×(1-anticipo), 4)
-                          sin anticipo: round(precioBase×factorRedondeado, 4) usando enteros escalados
-  precioProvisorio,    ← con anticipo: round(precioBase×anticipo + precioBase×factorProvisorio×(1-anticipo), 4)
-                          sin anticipo: round(precioBase×factorProvisorio, 4) usando enteros escalados
-  remTeorico, remReal, remAplicado,
-  nota, factor,
-  adecuacion,          ← round(precioVigente × remAplicado × variacion, 4) × (1-anticipo) si aplica
-  ajusteOC,            ← round(cv × remAplicado × (precioProvisorio - precioProvAnterior), 4)
-  saldoReintegro       ← round(adecuacion - ajusteOC, 4)
-}
-```
-- `precioBase` = `precioRedeterminado` de adec anterior que procede, o `item.precio`
-- `precioProvAnterior` = `precioProvisorio` de adec anterior, o `item.precio`
-- `total` = suma de `adecuacion` de todos los ítems
 
 ---
 
-## engine.js — funciones clave
+## Módulo Modificaciones de Obra
+
+### Estructura de una modificación
+```javascript
+{
+  id,           // timestamp
+  nombre,
+  periodo,      // YYYY-MM — fecha de aplicación
+  items: [
+    {
+      id,
+      itemIdBase,   // id del ítem base (null si es nuevo)
+      nombre, unidad,
+      cantidad,     // + demasía / − economía
+      precio, precioOficial, factores,
+      esNuevo
+    }
+  ]
+}
+```
+
+### Tipos de ítems
+| Tipo | `itemIdBase` | `cantidad` | Plan | Redeterminación |
+|---|---|---|---|---|
+| Demasía | id del base | positiva | `planMod` | con remanente |
+| Economía | id del base | negativa | no | 100% (rem=1) |
+| Ítem nuevo | null | positiva | `planMod` | con remanente |
+
+### Estructura adecuación con modificaciones
+```javascript
+adecuaciones[]: {
+  ...campos actuales...,
+  detalle[],       // ítems obra base
+  detalleMod[]: [  // ítems de modificaciones
+    { modId, modNombre, itemId, nombre,
+      precioVigente, precioRedeterminado, precioProvisorio,
+      remTeorico, remReal, remAplicado, nota, factor,
+      adecuacion, ajusteOC, saldoReintegro }
+  ],
+  totalMod
+}
+```
+
+---
+
+## engine.js
+
+### `cantidadVigente(itemId, periodo)`
+```javascript
+function cantidadVigente(itemId, periodo) {
+    const item = state.items.find(i => i.id === itemId);
+    if (!item) return 0;
+    let cantidad = item.cantidad;
+    for (const mod of (state.modificaciones || [])) {
+        if (mod.periodo > periodo) continue;
+        for (const mi of (mod.items || [])) {
+            if (mi.itemIdBase === itemId)
+                cantidad = Math.round((cantidad + mi.cantidad) * 10000) / 10000;
+        }
+    }
+    return cantidad;
+}
+```
+
+⚠️ `cantidadVigente` NO se usa para calcular `cv` en redeterminaciones de obra base ni en `remanente()` — siempre se usa `item.cantidad` para mantener separados los cálculos de obra base y modificaciones.
+
+### `remanente(itemId, periodo)`
+```javascript
+function remanente(itemId, periodo) {
+    const item = state.items.find(i => i.id === itemId);
+    const cv = item ? item.cantidad : 0;  // ← cantidad ORIGINAL, no vigente
+    if (cv === 0) return { teorico: 0, real: 0, aplicado: 0, nota: 'economia' };
+    const ap = acumPlan(itemId, periodo);
+    const ar = acumReal(itemId, periodo);
+    const teorico = Math.max(0, 1 - ap / cv);
+    const real = Math.max(0, 1 - ar / cv);
+    const aplicado = Math.min(teorico, real);
+    let nota = 'ok';
+    if (teorico === 0 && real > 0) nota = 'penalizado';
+    else if (real < teorico) nota = 'real-menor';
+    else if (teorico < real) nota = 'teorico-menor';
+    return { teorico, real, aplicado, nota };
+}
+```
+
+### `getFactorItem(item, periodo, basePeriodo)`
+```javascript
+// Retorna factor ponderado por polinómica del ítem
+// CORRECTO: return factor / pesoTotal  (NO: 1 + (factor - pesoTotal))
+return factor / pesoTotal;
+```
+
+### Funciones engine
 | Función | Descripción |
 |---|---|
-| `cantidadVigente(itemId, periodo)` | Última versión del ítem con fecha <= período |
-| `acumPlan(itemId, hasta)` | Suma plan hasta período |
-| `acumReal(itemId, hasta)` | Suma real hasta período |
-| `remanente(itemId, periodo)` | `{teorico, real, aplicado, nota}` — aplicado = MIN(teorico, real) |
-| `calcIopBase(periodo)` | Última adec. que procede antes del período, o `state.iopBase` |
-| `periodoLabel(p)` | `YYYY-MM` → `"Mes YYYY"`. Soporta `MES-N` |
+| `acumPlan(itemId, hasta)` | Suma plan base |
+| `acumReal(itemId, hasta)` | Suma real base |
+| `acumPlanMod(modId, itemId, hasta)` | Suma planMod de una modificación |
+| `acumRealMod(modId, itemId, hasta)` | Suma realMod de una modificación |
+| `remanente(itemId, periodo)` | `{teorico, real, aplicado, nota}` — usa `item.cantidad` original |
+| `remanenteMod(mod, itemMod, periodo)` | Remanente para ítem de modificación |
+| `calcIopBase(periodo)` | Última adec. que procede antes del período |
+| `periodoLabel(p)` | `YYYY-MM` → `"Mes YYYY"` |
 | `fmt$(n)` / `fmtPct(n)` | Formateo moneda AR / porcentaje |
 
 ---
 
-## iop.js — funciones clave
+## iop.js
 
-### Firmas
-```javascript
-getIOP(periodo, basePeriodo)              // → VRI ponderado (variación, no valor absoluto)
-getIOPConsolidado(periodo, basePeriodo)   // ídem
-getIOPFactores(periodo)                   // → window.iopGlobal[periodo]
-getFactorItem(item, periodo, basePeriodo) // → factor individual del ítem (ej: 1.1584)
-```
+### `getIOPConsolidado` — ponderadores
+- Usa `precioOficial` (cae a `precio` si es 0)
+- Normalización con `normUp()`
 
-### `getIOPConsolidado` — ponderadores ✅
-- Usa `precioOficial` para ponderadores (precio presupuesto oficial)
-- Si `precioOficial` es 0 o undefined, cae a `precio`
-- Normalización de nombres con `normUp()` (quita tildes, mayúsculas)
-
-### Cálculo de factorProvisorio ✅ verificado contra sistema de referencia
+### Cálculo factorProvisorio ✅
 ```javascript
 const factorRedondeado = Math.round(factor * 10000) / 10000;
 const variacion = Math.round((factorRedondeado - 1) * 10000) / 10000;
-
-// Si el 4to decimal es 0, usar factor sin redondear (casos borde de redondeo)
 const tieneDecimal4Cero = Math.round(factor * 10000) % 10 === 0;
 const factorParaFP = (detalleAnterior && tieneDecimal4Cero) ? factor : factorRedondeado;
-
 const factorProvisorio = detalleAnterior
     ? Math.round((1 + (factorParaFP - 1) * FAP) * 10000) / 10000
     : 1 + Math.round(Math.round((factor - 1) * 10000) / 10000 * FAP * 10000) / 10000;
@@ -149,148 +214,149 @@ const factorProvisorio = detalleAnterior
 
 ---
 
-## estructura.js — flujo de importación
+## adecuaciones.js
 
-### Flujo correcto
-1. **`importarPresupuesto(input)`** — importa oferta, crea ítems con `precio` directo
-   - Hoja `Presupuesto` o primera hoja, busca columna `Designación`
-   - Crea ítems con `precio` del Excel, `factores: []`
-2. **`importarOficialExcel(input)`** — agrega `precioOficial` a ítems existentes
-   - Mapea por posición — misma cantidad de ítems que la obra
-   - Solo actualiza `item.precioOficial`, no toca `precio`
-3. **`importarPolinomica(input)`** — carga factores por ítem
+### Separación obra base / modificaciones ⚠️
+- Obra base y modificaciones se redeterminan **por separado**
+- En obra base: `cv = item.cantidad` (cantidad original, nunca `cantidadVigente`)
+- En modificaciones: `cv = itemMod.cantidad` (con signo — negativo para economías)
+- El botón "+ Mod." aparece siempre que haya modificaciones, independientemente de su período
 
-### ⚠️ Advertencia crítica
-Si se reimportan los ítems, se borran `state.plan` y `state.real`. Los remanentes darán `1` en todas las adecuaciones causando cálculos incorrectos. Siempre reimportar plan y real después de reimportar ítems.
-
----
-
-## adecuaciones.js — lógica del gatillo
-
-### `calcularEstadoGatillo()` — algoritmo
-```
-base_inicial = período IOP anterior a fechaApertura
-período 0 (= fechaApertura) → variacion: null, basePeriodo: null
-período i (i > 0):
-  periodoAnterior = periodos[i-1]
-  si adecuación procede en periodoAnterior:
-      idxAnterior = todos.indexOf(periodoAnterior)
-      baseIndex = todos[idxAnterior - 1]   ← dos posiciones atrás
-  periodoCalculo = periodoAnterior
-  variacion = getIOP(periodoCalculo, baseIndex)
-  supera = variacion > gatillo/100
-resultado[i] = { periodo, variacion, supera, basePeriodo: baseIndex, periodoCalculo }
+### Anticipo financiero en modificaciones
+- **Demasías e ítems nuevos** (`itemMod.cantidad > 0`): aplican anticipo
+- **Economías** (`itemMod.cantidad < 0`): NO aplican anticipo
+```javascript
+const aplicarAnticipoMod = anticipo > 0 && state.obra.anticipoPeriodo 
+    && periodo > state.obra.anticipoPeriodo && itemMod.cantidad > 0;
 ```
 
-### Bloque de cálculo por ítem ✅ verificado adec 1, 2 y 3
+### `registrarAdecuacionDirecta` — flujo
+1. Calcula obra base normalmente
+2. **NO calcula `detalleMod`** — lo deja vacío `[]` para que el usuario use "↺ Mod."
+3. El usuario debe clickear "+ Mod." / "↺ Mod." para calcular modificaciones
+
+### Bloque de cálculo por ítem obra base ✅
 ```javascript
 const FAP = 0.95;
-let adecuacion = 0, saldoReintegro = 0, ajusteOC = 0;
-let precioRedeterminado = precioBase, precioProvisorio = precioBase;
-
-if (procede) {
-    const anticipo = (state.obra.anticipoPct || 0) / 100;
-    const aplicarAnticipo = anticipo > 0 && state.obra.anticipoPeriodo && periodo > state.obra.anticipoPeriodo;
-
-    const factorRedondeado = Math.round(factor * 10000) / 10000;
-    const variacion = Math.round((factorRedondeado - 1) * 10000) / 10000;
-
-    const tieneDecimal4Cero = Math.round(factor * 10000) % 10 === 0;
-    const factorParaFP = (detalleAnterior && tieneDecimal4Cero) ? factor : factorRedondeado;
-    const factorProvisorio = detalleAnterior
-        ? Math.round((1 + (factorParaFP - 1) * FAP) * 10000) / 10000
-        : 1 + Math.round(Math.round((factor - 1) * 10000) / 10000 * FAP * 10000) / 10000;
-
-    adecuacion = Math.round(precioVigente * rem.aplicado * variacion * 10000) / 10000;
-
-    if (aplicarAnticipo) {
-        precioRedeterminado = Math.round((precioBase * anticipo + precioBase * factorRedondeado * (1 - anticipo)) * 10000) / 10000;
-        precioProvisorio    = Math.round((precioBase * anticipo + precioBase * factorProvisorio * (1 - anticipo)) * 10000) / 10000;
-        adecuacion          = Math.round(adecuacion * (1 - anticipo) * 10000) / 10000;
-    } else {
-        precioRedeterminado = Math.round(Math.round(precioBase * 10000) * Math.round(factorRedondeado * 10000) / 10000) / 10000;
-        precioProvisorio    = Math.round(Math.round(precioBase * 10000) * Math.round(factorProvisorio * 10000) / 10000) / 10000;
-    }
-
-    const precioProvAnterior = detalleAnterior?.precioProvisorio ?? item.precio;
-    ajusteOC = Math.round((cv * rem.aplicado * (precioProvisorio - precioProvAnterior) + (cv - cv) * precioProvAnterior) * 10000) / 10000;
-    saldoReintegro = Math.round((adecuacion - ajusteOC) * 10000) / 10000;
+const anticipo = (state.obra.anticipoPct || 0) / 100;
+const aplicarAnticipo = anticipo > 0 && state.obra.anticipoPeriodo && periodo > state.obra.anticipoPeriodo;
+// cv = item.cantidad  (NO cantidadVigente)
+adecuacion = Math.round(precioVigente * rem.aplicado * variacion * 10000) / 10000;
+if (aplicarAnticipo) {
+    precioRedeterminado = Math.round((precioBase * anticipo + precioBase * factorRedondeado * (1 - anticipo)) * 10000) / 10000;
+    precioProvisorio    = Math.round((precioBase * anticipo + precioBase * factorProvisorio * (1 - anticipo)) * 10000) / 10000;
+    adecuacion          = Math.round(adecuacion * (1 - anticipo) * 10000) / 10000;
+} else {
+    precioRedeterminado = Math.round(Math.round(precioBase * 10000) * Math.round(factorRedondeado * 10000) / 10000) / 10000;
+    precioProvisorio    = Math.round(Math.round(precioBase * 10000) * Math.round(factorProvisorio * 10000) / 10000) / 10000;
 }
-total += adecuacion;
+const precioProvAnterior = detalleAnterior?.precioProvisorio ?? item.precio;
+ajusteOC = Math.round(cv * rem.aplicado * (precioProvisorio - precioProvAnterior) * 10000) / 10000;
+saldoReintegro = Math.round((adecuacion - ajusteOC) * 10000) / 10000;
 ```
 
-**Reglas clave:**
-1. `remanente` usa `periodoCalculo` (mes anterior), no el período registrado
-2. `precioBase` = `precioRedeterminado` de la adecuación anterior que procede, o `item.precio`
-3. `precioProvAnterior` = `precioProvisorio` de la adecuación anterior, o `item.precio`
-4. `aplicarAnticipo` usa `periodo > anticipoPeriodo` (no `>=`)
+**Reglas:**
+1. `remanente` usa `periodoCalculo` (mes anterior)
+2. `precioBase` = `precioRedeterminado` adec anterior, o `item.precio`
+3. `precioProvAnterior` = `precioProvisorio` adec anterior, o `item.precio`
+4. `aplicarAnticipo`: `periodo > anticipoPeriodo` (no `>=`)
 5. `ajusteOC` NO se multiplica por `(1 - anticipo)`
-6. `(cv - cv)` siempre da 0 — pendiente implementar cv0
+6. `cv = item.cantidad` siempre para obra base
+
+### Modificaciones en adecuaciones
+- `registrarAdecuacionDirecta` guarda `detalleMod: []` — sin calcular
+- `recalcularConMod(periodo)` — calcula el `detalleMod` cuando el usuario lo pide
+- `guardarAdecuacion` (modal) también calcula `detalleMod` completo
+- Botón **"+ Mod."** / **"↺ Mod."** visible cuando `state.modificaciones.length > 0`
+- Factor del ítem de mod: usa `getFactorItem` del ítem base si existe, si no del ítem de la modificación
+- `detalleAnteriorMod` = busca en `adecAnterior.detalleMod` por `modId + itemId`
+- `cv = itemMod.cantidad` (con signo) para modificaciones
 
 ### Decreto 1082
 - Campo `decreto1082: boolean` en cada adecuación
 - Efecto: `penalizado` y `teorico-menor` usan `rem.aplicado = rem.real`
-- Nota → `'decreto1082'`
 
 ### `renderGatillo()` — tabla horizontal
 - Filas: var. acumulada · base activa · estado · acción
 - Acción: select empresa + checkbox Dec. 1082 + botón Calcular
 
-### `eliminarAdecuacion(ref)` — acepta string (periodo) o number (índice)
+### `mostrarDetalle(idx)`
+- Tabla obra base (`adec-detalle-tbody`)
+- Sección modificaciones (`adec-detalle-mod-section`) — div fuera de la tabla, agrupa por mod
+- Totales: ajuste OC base + mod por separado, luego resumen general combinado
 
 ---
 
-## resumen.js — métricas
+## versiones.js — Pantalla Modificaciones
 
-### grid4 — 4 metrics
-| ID | Label | Valor |
-|---|---|---|
-| `r-contrato` | Contrato original | `totalOrig` |
-| `r-vigente` | Nuevo monto de contrato | `totalOrig + totalAjusteOC` |
-| `r-adecuado` | Ajuste OC acumulado | `totalAjusteOC` |
-| `r-saldo` | Saldo a integrar — definitiva | `totalSaldo` |
+### UI
+- Cards por modificación con resumen: demasías / economías / nuevos
+- Click en card header → abre modal para editar ítems
+- Dentro de cada card (inline): tablas de plan y avance real
+- Botones plantilla + importar plan y real por card
+
+### Funciones principales
+| Función | Descripción |
+|---|---|
+| `renderVersiones()` | Renderiza cards con tablas inline de plan y real |
+| `nuevaModificacion()` | Abre modal crear |
+| `crearModificacion()` | Persiste en `state.modificaciones` |
+| `abrirDetalleMod(id)` | Abre modal editar ítems |
+| `agregarItemMod()` | Agrega ítem a la mod activa |
+| `eliminarItemMod(itemId)` | Elimina ítem de la mod activa |
+| `eliminarModificacion()` | Borra mod + planMod/realMod asociados |
+| `descargarPlantillaPlanMod(modId)` | Excel solo demasías/nuevos |
+| `handlePlanModExcel(event, modId)` | Lee Excel de plan |
+| `procesarPlanModExcel(data, modId)` | Procesa e importa planMod |
+| `descargarPlantillaRealMod(modId)` | Excel para avance real |
+| `handleRealModExcel(event, modId)` | Lee Excel de real |
+| `procesarRealModExcel(data, modId)` | Procesa e importa realMod |
 
 ---
 
 ## plan.js
-
-### `screen-plan` → `renderPlanScreen()` → `renderPlanTable()`
-- Sin selects de remanente, sin botón "Cargar período manual"
-- Botón "Borrar plan" → `borrarPlan()`
+- `renderPlanTable()` — sin selects de remanente
+- `cv = item.cantidad` (cantidad original, no `cantidadVigente`)
+- `borrarPlan()` → `state.plan = []; save(); renderPlanTable()`
 - Validación al importar: bloquea si ítem ya tenía plan y hay adecuaciones calculadas
 
-### `screen-real` → `renderRealScreen()` / `renderRealTable()`
-- Sin botón "Cargar período manual"
-- `procesarRealExcel()` llama `renderRealTable()` al finalizar
+## plan.js / real.js — tablas
+- `cv = item.cantidad` para % ejecutado (no `cantidadVigente`)
+- El avance de modificaciones se gestiona por separado en `versiones.js`
 
 ---
 
-## CSS — organización actual
+## resumen.js — grid4
+| ID | Label |
+|---|---|
+| `r-contrato` | Contrato original |
+| `r-vigente` | Nuevo monto de contrato |
+| `r-adecuado` | Ajuste OC acumulado |
+| `r-saldo` | Saldo a integrar |
 
+---
+
+## CSS
 ### `base.css` — paleta negro/dorado
-- `--bg: #FAF8F2` · `--surface: #FFFFFF` · `--surface2: #F5F2EA`
-- `--accent: #0D0D0D` · `--accent-mid: #C9A84C` · `--accent-light: #FEF3D0`
+- `--bg: #FAF8F2` · `--surface: #FFFFFF` · `--accent-mid: #C9A84C`
 - `.nav-item.active` → `background:#C9A84C; color:#0D0D0D`
-- `.main` tiene `overflow-x: hidden`
 
 ### `screens.css`
-- `.grid-iop`: 3fr + 160px, `align-items:stretch`
-- Tablas plan y real: thead sticky, primera columna sticky, `max-height:65vh`
-- Inputs numéricos sin flechas, sin scroll con mouse
+- `.grid-iop`: 3fr + 160px
+- Tablas plan/real: thead sticky, primera columna sticky, `max-height:65vh`
 
 ---
 
 ## Pendiente
-- Exportar adecuación a Excel (revisar para decreto1082)
+- Exportar adecuación a Excel (revisar decreto1082 y detalleMod)
 - Backup JSON
-- Edición inline plan
-- `renderIOPEstado()`: agregar variación acumulada correcta
+- `renderIOPEstado()`: variación acumulada correcta
 - PDF informe adecuación
 - Modo auditoría
 - Redeterminación definitiva
+- FAP (0.95) hardcodeado
 - Validación plan sume 100% por ítem
-- FAP (0.95) hardcodeado — podría ser configurable por obra
-- `(cv - cv)` en fórmula ajusteOC siempre da 0 — implementar cv0 correctamente
+- Resumen en `resumen.js` aún no incluye `totalMod` de adecuaciones
 
 ---
 
@@ -298,20 +364,25 @@ total += adecuacion;
 | Término | Definición |
 |---|---|
 | VRI | Variación acumulada ponderada por polinómica |
-| Gatillo | VRI mínimo para adecuación (default 10%, configurable) |
+| Gatillo | VRI mínimo para adecuación (default 10%) |
 | FAP | Factor de Adecuación Provisional = 0.95 |
 | `periodoCalculo` | Período anterior al registrado |
-| `basePeriodo` | Período base activo al momento del cálculo |
+| `basePeriodo` | Período base activo |
 | `adecuacion` | Monto redeterminado bruto por ítem |
 | `ajusteOC` | Monto a pagar en orden de compra |
 | `saldoReintegro` | adecuacion - ajusteOC |
 | `precioRedeterminado` | Base para la próxima adecuación |
 | `precioProvisorio` | Base para calcular ajusteOC incremental |
-| `precio` | Precio de oferta — base para todos los cálculos |
-| `precioOficial` | Precio del presupuesto oficial — para ponderadores de polinómica |
-| `anticipoPct` | Porcentaje de anticipo financiero |
-| `anticipoPeriodo` | Período desde el que aplica el anticipo |
+| `precio` | Precio de oferta |
+| `precioOficial` | Precio presupuesto oficial — solo ponderadores |
+| `anticipoPct` | Porcentaje anticipo financiero |
+| `anticipoPeriodo` | Período desde que aplica anticipo (`periodo > anticipoPeriodo`) |
 | Rem. aplicado | MIN(teórico, real) — salvo decreto 1082 |
-| Decreto 1082 | Penalizados y teorico-menor usan remReal como aplicado |
+| Decreto 1082 | Penalizados/teorico-menor usan remReal |
+| Demasía | Aumento de cantidad en modificación |
+| Economía | Disminución de cantidad (negativa) en modificación |
+| `planMod[]` | Plan de avance de demasías/nuevos |
+| `realMod[]` | Avance real de demasías/nuevos |
+| `detalleMod[]` | Detalle de adecuación para ítems de modificaciones |
 | fechaApertura | Inicio del cálculo del gatillo |
-| fechaReplanteo | Inicio real de obra — base para columnas de plan |
+| fechaReplanteo | Inicio real de obra |

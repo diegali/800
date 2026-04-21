@@ -179,30 +179,114 @@ function renderVersiones() {
     container.innerHTML = state.modificaciones
         .sort((a, b) => a.periodo.localeCompare(b.periodo))
         .map(mod => {
-            const nItems = mod.items.length;
             const demasias = mod.items.filter(i => !i.esNuevo && i.cantidad > 0).length;
             const economias = mod.items.filter(i => !i.esNuevo && i.cantidad < 0).length;
             const nuevos = mod.items.filter(i => i.esNuevo).length;
-            return `<div class="card" style="margin:8px 0;cursor:pointer" onclick="abrirDetalleMod(${mod.id})">
-                <div class="card-header">
+            const itemsMod = mod.items.filter(i => i.esNuevo || i.cantidad > 0);
+
+            // Tabla plan
+            const planMod = (state.planMod || []).filter(p => p.modId === mod.id);
+            const periodosP = [...new Set(planMod.map(p => p.periodo))].sort();
+            const tablaPlan = itemsMod.length && planMod.length ? `
+                <div style="overflow-x:auto;margin-top:8px">
+                    <table style="font-size:12px">
+                        <thead><tr>
+                            <th style="position:sticky;left:0;background:var(--surface2)">Ítem</th>
+                            <th>Cant.</th>
+                            ${periodosP.map(p => `<th>${periodoLabel(p)}</th>`).join('')}
+                            <th>Total</th><th>%</th>
+                        </tr></thead>
+                        <tbody>
+                        ${itemsMod.map(item => {
+                const cells = periodosP.map(p => {
+                    const r = planMod.find(r => r.itemId === item.id && r.periodo === p);
+                    return `<td class="num">${r ? r.cantidad : '—'}</td>`;
+                }).join('');
+                const total = planMod.filter(r => r.itemId === item.id).reduce((s, r) => s + r.cantidad, 0);
+                const pct = item.cantidad > 0 ? (total / item.cantidad * 100).toFixed(1) + '%' : '—';
+                return `<tr>
+                                <td style="position:sticky;left:0;background:var(--surface2);font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.nombre}</td>
+                                <td class="num">${item.cantidad}</td>
+                                ${cells}
+                                <td class="num fw6">${total}</td>
+                                <td class="num">${pct}</td>
+                            </tr>`;
+            }).join('')}
+                        </tbody>
+                    </table>
+                </div>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Sin plan cargado</div>`;
+
+            // Tabla real
+            const realMod = (state.realMod || []).filter(r => r.modId === mod.id);
+            const periodosR = [...new Set(realMod.map(r => r.periodo))].sort();
+            const tablaReal = itemsMod.length && realMod.length ? `
+                <div style="overflow-x:auto;margin-top:8px">
+                    <table style="font-size:12px">
+                        <thead><tr>
+                            <th style="position:sticky;left:0;background:var(--surface2)">Ítem</th>
+                            <th>Cant.</th>
+                            ${periodosR.map(p => `<th>${periodoLabel(p)}</th>`).join('')}
+                            <th>Total</th><th>%</th>
+                        </tr></thead>
+                        <tbody>
+                        ${itemsMod.map(item => {
+                const cells = periodosR.map(p => {
+                    const r = realMod.find(r => r.itemId === item.id && r.periodo === p);
+                    return `<td class="num">${r ? r.cantidad : '—'}</td>`;
+                }).join('');
+                const total = realMod.filter(r => r.itemId === item.id).reduce((s, r) => s + r.cantidad, 0);
+                const pct = item.cantidad > 0 ? (total / item.cantidad * 100).toFixed(1) + '%' : '—';
+                return `<tr>
+                                <td style="position:sticky;left:0;background:var(--surface2);font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.nombre}</td>
+                                <td class="num">${item.cantidad}</td>
+                                ${cells}
+                                <td class="num fw6">${total}</td>
+                                <td class="num">${pct}</td>
+                            </tr>`;
+            }).join('')}
+                        </tbody>
+                    </table>
+                </div>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Sin avance real cargado</div>`;
+
+            return `<div class="card" style="margin:8px 0">
+                <div class="card-header" style="cursor:pointer" onclick="abrirDetalleMod(${mod.id})">
                     <div>
                         <div class="card-title" style="font-size:14px">${mod.nombre}</div>
-                        <div class="card-sub">Período: ${periodoLabel(mod.periodo)} · ${nItems} cambio${nItems !== 1 ? 's' : ''}</div>
+                        <div class="card-sub">Período: ${periodoLabel(mod.periodo)}</div>
                     </div>
                     <div style="display:flex;gap:6px;align-items:center">
                         ${demasias ? `<span class="tag tag-ok">${demasias} demasía${demasias !== 1 ? 's' : ''}</span>` : ''}
                         ${economias ? `<span class="tag tag-no">${economias} economía${economias !== 1 ? 's' : ''}</span>` : ''}
                         ${nuevos ? `<span class="tag tag-info">${nuevos} nuevo${nuevos !== 1 ? 's' : ''}</span>` : ''}
+                        <span style="font-size:18px;color:var(--text3)">✎</span>
                     </div>
                 </div>
-            <div style="padding:8px 12px;display:flex;gap:8px;border-top:1px solid var(--border)">
-                <button class="btn btn-sm" onclick="event.stopPropagation();descargarPlantillaPlanMod(${mod.id})">📥 Plantilla plan</button>
-                <label class="btn btn-sm" style="cursor:pointer" onclick="event.stopPropagation()">
-                    📤 Importar plan
-                    <input type="file" accept=".xlsx,.xls" style="display:none" onchange="handlePlanModExcel(event,${mod.id})">
-                </label>
-            </div>
-        </div>`;
+                ${itemsMod.length ? `
+                <div style="padding:10px 12px;border-top:1px solid var(--border)">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Plan de avance</div>
+                        <div style="display:flex;gap:6px">
+                            <button class="btn btn-sm" onclick="event.stopPropagation();descargarPlantillaPlanMod(${mod.id})">📥 Plantilla</button>
+                            <label class="btn btn-sm btn-primary" style="cursor:pointer" onclick="event.stopPropagation()">
+                                📤 Importar
+                                <input type="file" accept=".xlsx,.xls" style="display:none" onchange="handlePlanModExcel(event,${mod.id})">
+                            </label>
+                        </div>
+                    </div>
+                    ${tablaPlan}
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;margin-bottom:4px">
+                        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Avance real</div>
+                        <div style="display:flex;gap:6px">
+                            <button class="btn btn-sm" onclick="event.stopPropagation();descargarPlantillaRealMod(${mod.id})">📥 Plantilla</button>
+                            <label class="btn btn-sm btn-primary" style="cursor:pointer" onclick="event.stopPropagation()">
+                                📤 Importar
+                                <input type="file" accept=".xlsx,.xls" style="display:none" onchange="handleRealModExcel(event,${mod.id})">
+                            </label>
+                        </div>
+                    </div>
+                    ${tablaReal}
+                </div>` : ''}
+            </div>`;
         }).join('');
 }
 
@@ -359,4 +443,303 @@ function handlePlanModExcel(event, modId) {
         event.target.value = '';
     };
     reader.readAsArrayBuffer(file);
+}
+
+function switchTabMod(tabId, btn) {
+    document.querySelectorAll('#modal-detalle-mod .tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('#modal-detalle-mod .tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    btn.classList.add('active');
+    if (tabId === 'mod-tab-plan') renderPlanModTabla(_modActivaId);
+    if (tabId === 'mod-tab-real') renderRealModTabla(_modActivaId);
+}
+
+function renderPlanModTabla(modId) {
+    const mod = state.modificaciones.find(m => m.id === modId);
+    const thead = document.getElementById('mod-plan-thead');
+    const tbody = document.getElementById('mod-plan-tbody');
+    const empty = document.getElementById('mod-plan-empty');
+
+    const itemsMod = (mod?.items || []).filter(i => i.esNuevo || i.cantidad > 0);
+    if (!itemsMod.length) {
+        thead.innerHTML = ''; tbody.innerHTML = '';
+        empty.style.display = 'block'; return;
+    }
+
+    const planMod = (state.planMod || []).filter(p => p.modId === modId);
+    if (!planMod.length) {
+        thead.innerHTML = ''; tbody.innerHTML = '';
+        empty.style.display = 'block'; return;
+    }
+
+    empty.style.display = 'none';
+    const periodos = [...new Set(planMod.map(p => p.periodo))].sort();
+
+    thead.innerHTML = `<tr>
+        <th style="position:sticky;left:0;background:var(--surface)">Ítem</th>
+        <th>Cantidad</th>
+        ${periodos.map(p => `<th>${periodoLabel(p)}</th>`).join('')}
+        <th>Total</th>
+        <th>%</th>
+    </tr>`;
+
+    tbody.innerHTML = itemsMod.map(item => {
+        const cells = periodos.map(p => {
+            const reg = planMod.find(r => r.itemId === item.id && r.periodo === p);
+            return `<td class="num">${reg ? reg.cantidad : '—'}</td>`;
+        }).join('');
+        const total = planMod.filter(r => r.itemId === item.id).reduce((s, r) => s + r.cantidad, 0);
+        const pct = item.cantidad > 0 ? (total / item.cantidad * 100).toFixed(1) + '%' : '—';
+        return `<tr>
+            <td style="position:sticky;left:0;background:var(--surface);font-weight:500">${item.nombre}</td>
+            <td class="num">${item.cantidad}</td>
+            ${cells}
+            <td class="num fw6">${total}</td>
+            <td class="num">${pct}</td>
+        </tr>`;
+    }).join('');
+}
+
+function renderRealModTabla(modId) {
+    const mod = state.modificaciones.find(m => m.id === modId);
+    const thead = document.getElementById('mod-real-thead');
+    const tbody = document.getElementById('mod-real-tbody');
+    const empty = document.getElementById('mod-real-empty');
+
+    const itemsMod = (mod?.items || []).filter(i => i.esNuevo || i.cantidad > 0);
+    if (!itemsMod.length) {
+        thead.innerHTML = ''; tbody.innerHTML = '';
+        empty.style.display = 'block'; return;
+    }
+
+    const realMod = (state.realMod || []).filter(r => r.modId === modId);
+    if (!realMod.length) {
+        thead.innerHTML = ''; tbody.innerHTML = '';
+        empty.style.display = 'block'; return;
+    }
+
+    empty.style.display = 'none';
+    const periodos = [...new Set(realMod.map(r => r.periodo))].sort();
+
+    thead.innerHTML = `<tr>
+        <th style="position:sticky;left:0;background:var(--surface)">Ítem</th>
+        <th>Cantidad</th>
+        ${periodos.map(p => `<th>${periodoLabel(p)}</th>`).join('')}
+        <th>Total</th>
+        <th>%</th>
+    </tr>`;
+
+    tbody.innerHTML = itemsMod.map(item => {
+        const cells = periodos.map(p => {
+            const reg = realMod.find(r => r.itemId === item.id && r.periodo === p);
+            return `<td class="num">${reg ? reg.cantidad : '—'}</td>`;
+        }).join('');
+        const total = realMod.filter(r => r.itemId === item.id).reduce((s, r) => s + r.cantidad, 0);
+        const pct = item.cantidad > 0 ? (total / item.cantidad * 100).toFixed(1) + '%' : '—';
+        return `<tr>
+            <td style="position:sticky;left:0;background:var(--surface);font-weight:500">${item.nombre}</td>
+            <td class="num">${item.cantidad}</td>
+            ${cells}
+            <td class="num fw6">${total}</td>
+            <td class="num">${pct}</td>
+        </tr>`;
+    }).join('');
+}
+
+function descargarPlantillaRealMod(modId) {
+    const mod = state.modificaciones.find(m => m.id === modId);
+    if (!mod) return;
+    const itemsMod = mod.items.filter(i => i.esNuevo || i.cantidad > 0);
+    if (!itemsMod.length) return alert('Esta modificación no tiene demasías ni ítems nuevos.');
+
+    const duracionDias = state.obra.duracionDias || 0;
+    const totalMeses = Math.ceil(duracionDias / 30);
+    if (!totalMeses) return alert('La obra no tiene duración cargada.');
+
+    const fechaReplanteo = state.obra.fechaReplanteo || null;
+    const columnasMeses = [];
+    for (let i = 0; i < totalMeses; i++) {
+        if (fechaReplanteo) {
+            const [anio, mes] = fechaReplanteo.split('-').map(Number);
+            const fecha = new Date(anio, mes - 1 + i, 1);
+            columnasMeses.push(`${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`);
+        } else {
+            columnasMeses.push(`Mes ${i + 1}`);
+        }
+    }
+
+    const header = ['Ítem', 'Unidad', 'Cantidad', ...columnasMeses, 'Total real'];
+    const filas = itemsMod.map((item, idx) => {
+        const filaExcel = idx + 2;
+        function colLetra(n) {
+            let s = ''; while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); } return s;
+        }
+        const colPrimerMes = 3, colTotal = colPrimerMes + totalMeses;
+        const primerCelda = `${colLetra(colPrimerMes + 1)}${filaExcel}`;
+        const ultimaCelda = `${colLetra(colTotal)}${filaExcel}`;
+        return [item.nombre, item.unidad, item.cantidad, ...columnasMeses.map(() => null), { f: `SUM(${primerCelda}:${ultimaCelda})` }];
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([header, ...filas]);
+    ws['!cols'] = [{ wch: 35 }, { wch: 10 }, { wch: 12 }, ...columnasMeses.map(() => ({ wch: 13 })), { wch: 13 }];
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Real');
+    XLSX.writeFile(wb, `real_mod_${mod.nombre.replace(/\s+/g, '_')}.xlsx`);
+}
+
+function handleRealModExcel(event, modId) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const ws = wb.Sheets['Real'] || wb.Sheets['Hoja1'] || wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+        procesarRealModExcel(rows, modId);
+        event.target.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function procesarRealModExcel(data, modId) {
+    const mod = state.modificaciones.find(m => m.id === modId);
+    if (!mod) return;
+    const itemsMod = mod.items.filter(i => i.esNuevo || i.cantidad > 0);
+    const headers = data[0];
+    const filas = data.slice(1).filter(f => f[0]);
+    const idxTotal = headers.findIndex(h => h && String(h).toLowerCase().includes('total'));
+    const colFin = idxTotal > 0 ? idxTotal : headers.length;
+    const columnasMeses = headers.slice(3, colFin);
+    const fechaReplanteo = state.obra.fechaReplanteo || null;
+    let nuevosReal = [];
+    let errores = [];
+
+    filas.forEach(fila => {
+        const nombreFila = String(fila[0] || '').trim();
+        const itemMod = itemsMod.find(i => i.nombre.trim() === nombreFila);
+        if (!itemMod) { errores.push(nombreFila); return; }
+        columnasMeses.forEach((col, idx) => {
+            const cantidad = parseFloat(fila[3 + idx]);
+            if (isNaN(cantidad) || cantidad === 0) return;
+            let periodo;
+            if (/^\d{4}-\d{2}$/.test(String(col))) {
+                periodo = String(col);
+            } else if (fechaReplanteo) {
+                const [anioBase, mesBase] = fechaReplanteo.split("-").map(Number);
+                const fecha = new Date(anioBase, mesBase - 1 + idx, 1);
+                periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+            } else {
+                periodo = `MES-${idx + 1}`;
+            }
+            nuevosReal.push({ modId, itemId: itemMod.id, periodo, cantidad });
+        });
+    });
+
+    if (errores.length) alert(`Ítems no encontrados (ignorados):\n${errores.join('\n')}`);
+    if (!nuevosReal.length) return alert('No se encontraron datos de avance real.');
+
+    const itemsImportados = new Set(nuevosReal.map(r => r.itemId));
+    if (!state.realMod) state.realMod = [];
+    state.realMod = state.realMod.filter(r => !(r.modId === modId && itemsImportados.has(r.itemId)));
+    nuevosReal.forEach(nr => state.realMod.push(nr));
+    save();
+    alert(`Avance real cargado: ${nuevosReal.length} registros.`);
+    renderRealModTabla(mod.id);
+}
+
+function descargarPlantillaRealMod(modId) {
+    const mod = state.modificaciones.find(m => m.id === modId);
+    if (!mod) return;
+    const itemsMod = mod.items.filter(i => i.esNuevo || i.cantidad > 0);
+    if (!itemsMod.length) return alert('Esta modificación no tiene demasías ni ítems nuevos.');
+    const duracionDias = state.obra.duracionDias || 0;
+    const totalMeses = Math.ceil(duracionDias / 30);
+    if (!totalMeses) return alert('La obra no tiene duración cargada.');
+    const fechaReplanteo = state.obra.fechaReplanteo || null;
+    const columnasMeses = [];
+    for (let i = 0; i < totalMeses; i++) {
+        if (fechaReplanteo) {
+            const [anio, mes] = fechaReplanteo.split('-').map(Number);
+            const fecha = new Date(anio, mes - 1 + i, 1);
+            columnasMeses.push(`${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`);
+        } else {
+            columnasMeses.push(`Mes ${i + 1}`);
+        }
+    }
+    function colLetra(n) {
+        let s = ''; while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); } return s;
+    }
+    const colPrimerMes = 3, colTotal = colPrimerMes + totalMeses;
+    const header = ['Ítem', 'Unidad', 'Cantidad', ...columnasMeses, 'Total real'];
+    const filas = itemsMod.map((item, idx) => {
+        const filaExcel = idx + 2;
+        const primerCelda = `${colLetra(colPrimerMes + 1)}${filaExcel}`;
+        const ultimaCelda = `${colLetra(colTotal)}${filaExcel}`;
+        return [item.nombre, item.unidad, item.cantidad, ...columnasMeses.map(() => null), { f: `SUM(${primerCelda}:${ultimaCelda})` }];
+    });
+    const ws = XLSX.utils.aoa_to_sheet([header, ...filas]);
+    ws['!cols'] = [{ wch: 35 }, { wch: 10 }, { wch: 12 }, ...columnasMeses.map(() => ({ wch: 13 })), { wch: 13 }];
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Real');
+    XLSX.writeFile(wb, `real_mod_${mod.nombre.replace(/\s+/g, '_')}.xlsx`);
+}
+
+function handleRealModExcel(event, modId) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const ws = wb.Sheets['Real'] || wb.Sheets['Hoja1'] || wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+        procesarRealModExcel(rows, modId);
+        event.target.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function procesarRealModExcel(data, modId) {
+    const mod = state.modificaciones.find(m => m.id === modId);
+    if (!mod) return;
+    const itemsMod = mod.items.filter(i => i.esNuevo || i.cantidad > 0);
+    const headers = data[0];
+    const filas = data.slice(1).filter(f => f[0]);
+    const idxTotal = headers.findIndex(h => h && String(h).toLowerCase().includes('total'));
+    const colFin = idxTotal > 0 ? idxTotal : headers.length;
+    const columnasMeses = headers.slice(3, colFin);
+    const fechaReplanteo = state.obra.fechaReplanteo || null;
+    let nuevosReal = [], errores = [];
+    filas.forEach(fila => {
+        const nombreFila = String(fila[0] || '').trim();
+        const itemMod = itemsMod.find(i => i.nombre.trim() === nombreFila);
+        if (!itemMod) { errores.push(nombreFila); return; }
+        columnasMeses.forEach((col, idx) => {
+            const cantidad = parseFloat(fila[3 + idx]);
+            if (isNaN(cantidad) || cantidad === 0) return;
+            let periodo;
+            if (/^\d{4}-\d{2}$/.test(String(col))) {
+                periodo = String(col);
+            } else if (fechaReplanteo) {
+                const [anioBase, mesBase] = fechaReplanteo.split("-").map(Number);
+                const fecha = new Date(anioBase, mesBase - 1 + idx, 1);
+                periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+            } else {
+                periodo = `MES-${idx + 1}`;
+            }
+            nuevosReal.push({ modId, itemId: itemMod.id, periodo, cantidad });
+        });
+    });
+    if (errores.length) alert(`Ítems no encontrados (ignorados):\n${errores.join('\n')}`);
+    if (!nuevosReal.length) return alert('No se encontraron datos de avance real.');
+    const itemsImportados = new Set(nuevosReal.map(r => r.itemId));
+    if (!state.realMod) state.realMod = [];
+    state.realMod = state.realMod.filter(r => !(r.modId === modId && itemsImportados.has(r.itemId)));
+    nuevosReal.forEach(nr => state.realMod.push(nr));
+    save();
+    alert(`Avance real cargado: ${nuevosReal.length} registros.`);
+    renderVersiones();
 }

@@ -441,8 +441,10 @@
                                             </tr>
                                         </thead>
                                         <tbody id="adec-detalle-tbody"></tbody>
+
                                     </table>
                                 </div>
+                                <div id="adec-detalle-mod-section" style="display:none"></div>
                                 <div class="divider"></div>
                                 <div style="display:flex;justify-content:space-between;align-items:flex-end">
                                     <div id="adec-totales"></div>
@@ -658,7 +660,6 @@
                 <button class="modal-close" onclick="closeModal('modal-detalle-mod')">×</button>
             </div>
             <div class="modal-body">
-                <!-- Agregar ítem a la modificación -->
                 <div class="card" style="margin-bottom:12px">
                     <div class="card-header">
                         <div class="card-title" style="font-size:13px">Agregar cambio</div>
@@ -672,7 +673,6 @@
                             </select>
                         </div>
                     </div>
-                    <!-- Existente -->
                     <div id="mod-item-existente-fields">
                         <div class="form-row">
                             <div class="form-group">
@@ -686,7 +686,6 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Nuevo ítem -->
                     <div id="mod-item-nuevo-fields" style="display:none">
                         <div class="form-row">
                             <div class="form-group">
@@ -713,7 +712,6 @@
                         <button class="btn btn-primary" onclick="agregarItemMod()">+ Agregar</button>
                     </div>
                 </div>
-                <!-- Tabla de ítems de la modificación -->
                 <div class="tbl-wrap">
                     <table>
                         <thead>
@@ -737,10 +735,6 @@
             </div>
             <div class="modal-foot">
                 <button class="btn" onclick="closeModal('modal-detalle-mod');renderVersiones()">Cerrar</button>
-                <label class="btn btn-secondary" style="cursor:pointer">
-                    📥 Importar plan
-                    <input type="file" accept=".xlsx,.xls" style="display:none" onchange="handlePlanModExcel(event)">
-                </label>
                 <button class="btn btn-danger" onclick="eliminarModificacion()">Eliminar modificación</button>
             </div>
         </div>

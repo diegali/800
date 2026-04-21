@@ -9,7 +9,7 @@ function obraVacia() {
         id: Date.now(),
         fechaCreacion: new Date().toISOString().slice(0, 7),
         obra: { nombre: '', expediente: '', fecha: '', fechaApertura: '', contratista: '' },
-        items: [], modificaciones: [], planMod: [], plan: [], real: [], adecuaciones: [],
+        items: [], modificaciones: [], planMod: [], realMod: [], plan: [], real: [], adecuaciones: [],
         gatillo: 10, iopBase: null, nextId: 1
     };
 }
@@ -148,6 +148,7 @@ async function descargarTodoDeNube() {
         if (state) {
             if (!state.modificaciones) state.modificaciones = [];
             if (!state.planMod) state.planMod = [];
+            if (!state.realMod) state.realMod = [];
             window.state = state;
             setObraActivaId(state.id);
         } else {

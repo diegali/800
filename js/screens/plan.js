@@ -511,7 +511,7 @@ function renderRealTable() {
   const tbody = document.getElementById('real-tbody');
   tbody.innerHTML = state.items.map(item => {
     const ultimoPeriodo = periodos[periodos.length - 1];
-    const cv = cantidadVigente(item.id, ultimoPeriodo);
+    const cv = item.cantidad;
     let totalReal = 0;
 
     const celdas = periodos.map(p => {
