@@ -327,6 +327,17 @@
                                 </table>
                             </div>
                         </div>
+                        <div class="card" style="margin-top:16px">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Avance de obra</div>
+                                    <div class="card-sub">Plan vs. real por período</div>
+                                </div>
+                            </div>
+                            <div style="padding:16px;max-height:380px">
+                                <canvas id="grafico-avance"></canvas>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- ═══ IOP ═══ -->
@@ -445,6 +456,7 @@
                                     </table>
                                 </div>
                                 <div id="adec-detalle-mod-section" style="display:none"></div>
+                                <div id="adec-detalle-mod-acum" style="display:none"></div>
                                 <div class="divider"></div>
                                 <div style="display:flex;justify-content:space-between;align-items:flex-end">
                                     <div id="adec-totales"></div>
@@ -463,64 +475,94 @@
 
     <!-- Nueva obra -->
     <div class="modal-overlay" id="modal-nueva-obra">
-        <div class="modal">
-            <div class="modal-head">
-                <div class="modal-title">Nueva obra</div>
+        <div class="modal" style="max-width:580px;width:95%;overflow:hidden">
+            <div class="modal-head" style="border-bottom:2px solid var(--accent-mid);padding-bottom:14px">
+                <div>
+                    <div class="modal-title" style="font-size:16px">Nueva obra</div>
+                    <div style="font-size:11px;color:var(--text2);margin-top:2px">Datos generales del contrato</div>
+                </div>
                 <button class="modal-close" onclick="closeModal('modal-nueva-obra')">×</button>
             </div>
-            <div class="modal-body">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Nombre de la obra</label>
-                        <input type="text" id="obra-nombre" placeholder="Ej: Edificio Municipal Córdoba">
-                    </div>
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:20px">
+
+                <div class="form-group">
+                    <label
+                        style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2)">Nombre
+                        de la obra</label>
+                    <input type="text" id="obra-nombre" placeholder="Ej: Edificio Municipal Córdoba"
+                        style="font-size:15px;font-weight:600;padding:10px 12px">
                 </div>
-                <div class="form-row">
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
                     <div class="form-group">
-                        <label>Expediente / Número</label>
+                        <label
+                            style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2)">Expediente
+                            / Número</label>
                         <input type="text" id="obra-expediente" placeholder="Ej: EXP-2024-01234">
                     </div>
                     <div class="form-group">
-                        <label>Contratista</label>
+                        <label
+                            style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2)">Contratista</label>
                         <input type="text" id="obra-contratista">
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Fecha de apertura</label>
-                        <input type="month" id="obra-fecha-apertura">
-                    </div>
-                    <div class="form-group">
-                        <label>Fecha de contrato</label>
-                        <input type="month" id="obra-fecha">
-                    </div>
-                    <div class="form-group">
-                        <label>Fecha de replanteo</label>
-                        <input type="month" id="obra-fecha-replanteo">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Duración de la obra (días)</label>
-                        <input type="number" id="obra-duracion-dias" min="1" placeholder="Ej: 365">
-                    </div>
-                    <div class="form-group">
-                        <label>Meses estimados</label>
-                        <input type="text" id="obra-duracion-meses" disabled>
+
+                <div>
+                    <div
+                        style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);margin-bottom:8px">
+                        Fechas</div>
+                    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+                        <div class="form-group">
+                            <label style="font-size:11px;color:var(--text2)">Apertura</label>
+                            <input type="month" id="obra-fecha-apertura">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size:11px;color:var(--text2)">Contrato</label>
+                            <input type="month" id="obra-fecha">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size:11px;color:var(--text2)">Replanteo</label>
+                            <input type="month" id="obra-fecha-replanteo">
+                        </div>
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Anticipo financiero (%)</label>
-                        <input type="number" id="obra-anticipo-pct" min="0" max="100" placeholder="Ej: 25">
-                    </div>
-                    <div class="form-group">
-                        <label>Período de anticipo</label>
-                        <input type="month" id="obra-anticipo-periodo">
+
+                <div>
+                    <div
+                        style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);margin-bottom:8px">
+                        Duración</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                        <div class="form-group">
+                            <label style="font-size:11px;color:var(--text2)">Días</label>
+                            <input type="number" id="obra-duracion-dias" min="1" placeholder="Ej: 365">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size:11px;color:var(--text2)">Meses estimados</label>
+                            <input type="text" id="obra-duracion-meses" disabled
+                                style="background:var(--surface2);color:var(--accent-mid);font-weight:600;text-align:center">
+                        </div>
                     </div>
                 </div>
+
+                <div style="background:var(--surface2);border-radius:8px;padding:14px">
+                    <div
+                        style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);margin-bottom:10px">
+                        Anticipo financiero</div>
+                    <div style="display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:end">
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;color:var(--text2)">Porcentaje (%)</label>
+                            <input type="number" id="obra-anticipo-pct" min="0" max="100" placeholder="0"
+                                style="text-align:center;font-size:18px;font-weight:700;color:var(--accent-mid)">
+                        </div>
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;color:var(--text2)">Período desde el que aplica</label>
+                            <input type="month" id="obra-anticipo-periodo">
+                        </div>
+                    </div>
+                </div>
+
             </div>
-            <div class="modal-foot">
+            <div class="modal-foot" style="border-top:1px solid var(--border);padding-top:14px">
                 <button class="btn" onclick="closeModal('modal-nueva-obra')">Cancelar</button>
                 <button class="btn btn-primary" onclick="guardarObra()">Guardar obra</button>
             </div>
@@ -529,64 +571,99 @@
 
     <!-- MODAL EDITAR OBRA -->
     <div class="modal-overlay" id="modal-editar-obra">
-        <div class="modal">
-            <div class="modal-head">
-                <div class="modal-title">Editar obra</div>
+        <div class="modal" style="max-width:580px;width:95%">
+            <div class="modal-head" style="border-bottom:2px solid var(--accent-mid);padding-bottom:14px">
+                <div>
+                    <div class="modal-title" style="font-size:16px">Editar obra</div>
+                    <div style="font-size:11px;color:var(--text2);margin-top:2px">Datos generales del contrato</div>
+                </div>
                 <button class="modal-close" onclick="closeModal('modal-editar-obra')">×</button>
             </div>
-            <div class="modal-body">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Nombre de la obra</label>
-                        <input type="text" id="edit-obra-nombre" placeholder="Ej: Edificio Municipal Córdoba">
-                    </div>
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:20px">
+
+                <!-- Nombre -->
+                <div class="form-group">
+                    <label
+                        style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2)">Nombre
+                        de la obra</label>
+                    <input type="text" id="edit-obra-nombre" placeholder="Ej: Edificio Municipal Córdoba"
+                        style="font-size:15px;font-weight:600;padding:10px 12px">
                 </div>
-                <div class="form-row">
+
+                <!-- Expediente + Contratista -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
                     <div class="form-group">
-                        <label>Expediente / Número</label>
+                        <label
+                            style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2)">Expediente
+                            / Número</label>
                         <input type="text" id="edit-obra-expediente" placeholder="Ej: EXP-2024-01234">
                     </div>
                     <div class="form-group">
-                        <label>Contratista</label>
+                        <label
+                            style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2)">Contratista</label>
                         <input type="text" id="edit-obra-contratista">
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Fecha de apertura</label>
-                        <input type="month" id="edit-obra-fecha-apertura">
-                    </div>
-                    <div class="form-group">
-                        <label>Fecha de contrato</label>
-                        <input type="month" id="edit-obra-fecha">
-                    </div>
-                    <div class="form-group">
-                        <label>Fecha de replanteo</label>
-                        <input type="month" id="edit-obra-fecha-replanteo">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Duración de la obra (días)</label>
-                        <input type="number" id="edit-obra-duracion-dias" min="1" placeholder="Ej: 365">
-                    </div>
-                    <div class="form-group">
-                        <label>Meses estimados</label>
-                        <input type="text" id="edit-obra-duracion-meses" disabled>
+
+                <!-- Fechas -->
+                <div>
+                    <div
+                        style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);margin-bottom:8px">
+                        Fechas</div>
+                    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+                        <div class="form-group">
+                            <label style="font-size:11px;color:var(--text2)">Apertura</label>
+                            <input type="month" id="edit-obra-fecha-apertura">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size:11px;color:var(--text2)">Contrato</label>
+                            <input type="month" id="edit-obra-fecha">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size:11px;color:var(--text2)">Replanteo</label>
+                            <input type="month" id="edit-obra-fecha-replanteo">
+                        </div>
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Anticipo financiero (%)</label>
-                        <input type="number" id="edit-obra-anticipo-pct" min="0" max="100" placeholder="Ej: 25">
-                    </div>
-                    <div class="form-group">
-                        <label>Período de anticipo</label>
-                        <input type="month" id="edit-obra-anticipo-periodo">
+
+                <!-- Duración -->
+                <div>
+                    <div
+                        style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);margin-bottom:8px">
+                        Duración</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                        <div class="form-group">
+                            <label style="font-size:11px;color:var(--text2)">Días</label>
+                            <input type="number" id="edit-obra-duracion-dias" min="1" placeholder="Ej: 365">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size:11px;color:var(--text2)">Meses estimados</label>
+                            <input type="text" id="edit-obra-duracion-meses" disabled
+                                style="background:var(--surface2);color:var(--accent-mid);font-weight:600;text-align:center">
+                        </div>
                     </div>
                 </div>
+
+                <!-- Anticipo -->
+                <div style="background:var(--surface2);border-radius:8px;padding:14px">
+                    <div
+                        style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);margin-bottom:10px">
+                        Anticipo financiero</div>
+                    <div style="display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:end">
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;color:var(--text2)">Porcentaje (%)</label>
+                            <input type="number" id="edit-obra-anticipo-pct" min="0" max="100" placeholder="0"
+                                style="text-align:center;font-size:18px;font-weight:700;color:var(--accent-mid)">
+                        </div>
+                        <div class="form-group" style="margin:0">
+                            <label style="font-size:11px;color:var(--text2)">Período desde el que aplica</label>
+                            <input type="month" id="edit-obra-anticipo-periodo">
+                        </div>
+                    </div>
+                </div>
+
             </div>
-            <div class="modal-foot">
+            <div class="modal-foot" style="border-top:1px solid var(--border);padding-top:14px">
                 <button class="btn" onclick="closeModal('modal-editar-obra')">Cancelar</button>
                 <button class="btn btn-primary" onclick="guardarEdicionObra()">Guardar cambios</button>
             </div>
@@ -778,6 +855,19 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="modal-detalle-salto">
+        <div class="modal" style="max-width:900px;width:95%">
+            <div class="modal-head">
+                <div class="modal-title" id="modal-detalle-salto-title">Detalle salto</div>
+                <button class="modal-close" onclick="closeModal('modal-detalle-salto')">×</button>
+            </div>
+            <div class="modal-body" id="modal-detalle-salto-body"></div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeModal('modal-detalle-salto')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -804,6 +894,7 @@
         console.log("Firebase listo");
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script src="./js/config.js"></script>
     <script src="./js/state.js"></script>
     <script src="./js/engine.js"></script>

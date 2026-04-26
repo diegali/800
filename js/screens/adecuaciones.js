@@ -103,8 +103,27 @@ function renderGatillo() {
 
         let accion;
         if (yaCalculada) {
-            accion = `<button class="btn btn-sm btn-danger" onclick="eliminarAdecuacion('${r.periodo}')" style="font-size:10px">× Borrar</button>`;
-        } else if (r.supera) {
+            const tieneMods = state.modificaciones && state.modificaciones.length > 0;
+            const adecsMod = state.adecuacionesMod || [];
+            const saltoCalculado = adecsMod.some(a => a.saltos && a.saltos.some(s => s.periodo === r.periodo));
+            let btnMod = '';
+            if (tieneMods) {
+                if (saltoCalculado) {
+                    btnMod = adecsMod
+                        .filter(a => a.saltos && a.saltos.some(s => s.periodo === r.periodo))
+                        .map(a => `<button class="btn btn-sm" onclick="verDetalleSaltoMod(${a.modId},'${r.periodo}')" style="font-size:10px">📋 Detalle mod.</button>`)
+                        .join('');
+                } else {
+                    btnMod = `<button class="btn btn-sm btn-primary" onclick="calcularAdecuacionAcumuladaMod(${state.modificaciones[0].id},'${r.periodo}')" style="font-size:10px">+ Mod.</button>`;
+                }
+            }
+            accion = `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+            ${btnMod}
+            <button class="btn btn-sm btn-danger" onclick="eliminarAdecuacion('${r.periodo}')" style="font-size:10px">× Borrar</button>
+        </div>`;
+        }
+        else if (r.supera) {
             accion = `
                 <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
                     <select id="empresa-pidio-${r.periodo}" style="font-size:10px;padding:2px 4px;width:80px">
@@ -366,7 +385,39 @@ function mostrarDetalle(idx) {
     tbody.innerHTML = (a.detalle || []).map(filaDetalle).join('');
 
     // ── Tabla modificaciones ──
-    const detalleMod = a.detalleMod || [];
+    // Usar detalle acumulado si existe, si no el individual
+    const adecModEntrada = (state.adecuacionesMod || []).find(e => e.saltos && e.saltos.length);
+    // Armar detalle acumulado sumando todos los saltos por ítem
+    let detalleMod = a.detalleMod || [];
+    let totalModAjusteOCAcum = null;
+    let tituloMod = null;
+    if (adecModEntrada) {
+        const saltos = adecModEntrada.saltos;
+        const acumPorItem = {};
+        saltos.forEach(salto => {
+            salto.detalleMod.forEach(d => {
+                const key = `${d.modId}_${d.itemId}`;
+                if (!acumPorItem[key]) {
+                    acumPorItem[key] = { ...d, adecuacion: 0, ajusteOC: 0, saldoReintegro: 0 };
+                }
+                acumPorItem[key].adecuacion = Math.round((acumPorItem[key].adecuacion + d.adecuacion) * 10000) / 10000;
+                acumPorItem[key].ajusteOC = Math.round((acumPorItem[key].ajusteOC + (d.ajusteOC ?? 0)) * 10000) / 10000;
+                acumPorItem[key].saldoReintegro = Math.round((acumPorItem[key].saldoReintegro + (d.saldoReintegro ?? 0)) * 10000) / 10000;
+                // Usar factor, rem y precioVigente del último salto
+                acumPorItem[key].factor = d.factor;
+                acumPorItem[key].remTeorico = d.remTeorico;
+                acumPorItem[key].remReal = d.remReal;
+                acumPorItem[key].remAplicado = d.remAplicado;
+                acumPorItem[key].precioVigente = d.precioVigente;
+                acumPorItem[key].nota = d.nota;
+            });
+        });
+        detalleMod = Object.values(acumPorItem);
+        totalModAjusteOCAcum = adecModEntrada.totalAjusteOC;
+        const nrosSaltos = saltos.map((s, i) => `Adec. ${i + 1}`).join(' y ');
+        const ultimoSalto = saltos[saltos.length - 1];
+        tituloMod = `${adecModEntrada.modNombre} — ${nrosSaltos} · ${periodoLabel(ultimoSalto.periodo)}`;
+    }
     const seccionMod = document.getElementById('adec-detalle-mod-section');
     if (detalleMod.length) {
         // Agrupar por modificación
@@ -383,9 +434,9 @@ function mostrarDetalle(idx) {
                 Modificaciones de obra
             </div>
             ${Object.values(porMod).map(mod => `
-                <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px">
-                    ${mod.nombre}
-                </div>
+    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px">
+        ${tituloMod || mod.nombre}
+    </div>
                 <div class="tbl-wrap" style="margin-bottom:12px">
                     <table>
                         <thead><tr>
@@ -408,6 +459,40 @@ function mostrarDetalle(idx) {
                     <div style="font-size:16px;font-weight:600;font-family:var(--mono);color:${totalModSaldo >= 0 ? 'var(--ok)' : 'var(--danger)'}">${fmt$(totalModSaldo)}</div>
                 </div>
             </div>`;
+        // Adecuación acumulada de modificaciones
+        const adecsMod = state.adecuacionesMod || [];
+        const seccionAcum = document.getElementById('adec-detalle-mod-acum');
+        if (seccionAcum) {
+            if (adecsMod.length && adecsMod.some(a => a.saltos && a.saltos.length)) {
+                seccionAcum.innerHTML = `
+            <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px">
+                Adecuación acumulada de modificaciones
+            </div>
+            ${adecsMod.map(entrada => {
+                    const saltos = entrada.saltos || [];
+                    if (!saltos.length) return '';
+                    const nrosSaltos = saltos.map((s, i) => `Adec. ${i + 1}`).join(' · ');
+                    const ultimoSalto = saltos[saltos.length - 1];
+                    return `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+                    <div>
+                        <div style="font-size:13px;font-weight:600">${entrada.modNombre}</div>
+                        <div style="font-size:11px;color:var(--text2)">${nrosSaltos} · hasta ${periodoLabel(ultimoSalto.periodo)}</div>
+                    </div>
+                    <div style="display:flex;gap:24px;align-items:center">
+                        <div style="text-align:right">
+                            <div style="font-size:11px;color:var(--text2)">Ajuste OC acumulado</div>
+                            <div style="font-size:16px;font-weight:600;font-family:var(--mono);color:${entrada.totalAjusteOC >= 0 ? 'var(--ok)' : 'var(--danger)'}">${fmt$(entrada.totalAjusteOC)}</div>
+                        </div>
+                    </div>
+                </div>`;
+                }).join('')}`;
+                seccionAcum.style.display = 'block';
+            } else {
+                seccionAcum.innerHTML = '';
+                seccionAcum.style.display = 'none';
+            }
+        }
         seccionMod.style.display = 'block';
     } else {
         seccionMod.innerHTML = '';
@@ -417,7 +502,7 @@ function mostrarDetalle(idx) {
     // ── Totales ──
     const totalAjusteOC = (a.detalle || []).reduce((s, d) => s + (d.ajusteOC ?? 0), 0);
     const totalSaldoReintegro = (a.detalle || []).reduce((s, d) => s + (d.saldoReintegro ?? 0), 0);
-    const totalModAjusteOC = detalleMod.reduce((s, d) => s + (d.ajusteOC ?? 0), 0);
+    const totalModAjusteOC = totalModAjusteOCAcum ?? detalleMod.reduce((s, d) => s + (d.ajusteOC ?? 0), 0);
     const totalModSaldo = detalleMod.reduce((s, d) => s + (d.saldoReintegro ?? 0), 0);
 
     const contratoOriginal = state.items.reduce((s, i) => s + i.cantidad * i.precio, 0);
@@ -772,4 +857,156 @@ function recalcularConMod(periodo) {
     adec.totalMod = totalMod;
     save();
     renderAdecuaciones();
+}
+
+function calcularAdecuacionAcumuladaMod(modId, hastaPeriodo) {
+    const mod = state.modificaciones.find(m => m.id === modId);
+    if (!mod) return;
+
+    if (!state.adecuacionesMod) state.adecuacionesMod = [];
+    let entrada = state.adecuacionesMod.find(a => a.modId === modId);
+    if (!entrada) {
+        entrada = { modId, modNombre: mod.nombre, totalMod: 0, totalAjusteOC: 0, detalleMod: [], saltos: [] };
+        state.adecuacionesMod.push(entrada);
+    }
+
+    // Adecuaciones de obra base que proceden hasta hastaPeriodo
+    const adecsProceden = state.adecuaciones
+        .filter(a => a.procede && a.periodo <= hastaPeriodo)
+        .sort((a, b) => a.periodo.localeCompare(b.periodo));
+
+    if (!adecsProceden.length) {
+        alert('No hay adecuaciones de obra base que procedan hasta este período.');
+        return;
+    }
+
+    // Solo calcular las que faltan
+    const faltantes = adecsProceden.filter(a =>
+        !entrada.saltos.some(s => s.periodo === a.periodo)
+    );
+
+    if (!faltantes.length) {
+        alert('Todos los saltos hasta este período ya están calculados.');
+        return;
+    }
+
+    const anticipo = (state.obra.anticipoPct || 0) / 100;
+
+    for (const adec of faltantes) {
+        // adecAnterior = último salto calculado antes de este período
+        const saltosAnteriores = entrada.saltos
+            .filter(s => s.periodo < adec.periodo)
+            .sort((a, b) => b.periodo.localeCompare(a.periodo));
+        const adecAnteriorMod = saltosAnteriores.length
+            ? { detalleMod: saltosAnteriores[0].detalleMod }
+            : null;
+
+        const factorGlobal = adec.iopActual !== null ? 1 + adec.iopActual : 1;
+        const { detalleMod, totalMod } = calcularDetalleMod(
+            adec.periodo, adec.periodoCalculo, adec.basePeriodo,
+            factorGlobal, adecAnteriorMod, true, adec.decreto1082, anticipo
+        );
+
+        const totalAjusteOC = Math.round(detalleMod.reduce((s, d) => s + (d.ajusteOC || 0), 0) * 100) / 100;
+
+        entrada.saltos.push({
+            periodo: adec.periodo,
+            periodoCalculo: adec.periodoCalculo,
+            basePeriodo: adec.basePeriodo,
+            detalleMod,
+            totalMod: Math.round(totalMod * 100) / 100,
+            totalAjusteOC
+        });
+        // Mantener saltos ordenados
+        entrada.saltos.sort((a, b) => a.periodo.localeCompare(b.periodo));
+    }
+
+    // Recalcular totales acumulados
+    entrada.totalMod = Math.round(entrada.saltos.reduce((s, sl) => s + sl.totalMod, 0) * 100) / 100;
+    entrada.totalAjusteOC = Math.round(entrada.saltos.reduce((s, sl) => s + sl.totalAjusteOC, 0) * 100) / 100;
+    entrada.detalleMod = entrada.saltos[entrada.saltos.length - 1].detalleMod;
+
+    save();
+    renderAdecuaciones();
+    alert(`✓ ${faltantes.length} salto${faltantes.length > 1 ? 's' : ''} calculado${faltantes.length > 1 ? 's' : ''} · Ajuste OC acumulado ${fmt$(entrada.totalAjusteOC)}`);
+}
+
+function calcularAdecuacionAcumuladaMod_desde_gatillo() {
+    if (!state.modificaciones || !state.modificaciones.length) return;
+    if (state.modificaciones.length === 1) {
+        calcularAdecuacionAcumuladaMod(state.modificaciones[0].id);
+        return;
+    }
+    // Si hay más de una modificación, calcular todas
+    for (const mod of state.modificaciones) {
+        calcularAdecuacionAcumuladaMod(mod.id);
+    }
+}
+
+function verDetalleSaltoMod(modId, periodo) {
+    const entrada = (state.adecuacionesMod || []).find(a => a.modId === modId);
+    if (!entrada) return;
+    const salto = entrada.saltos.find(s => s.periodo === periodo);
+    if (!salto) return;
+
+    const notaMap = {
+        'economia': ['tag-no', 'Economía'],
+        'penalizado': ['tag-warn', 'Penalizado'],
+        'decreto1082': ['tag-info', 'Dec. 1082'],
+        'real-menor': ['tag-ok', 'Real menor'],
+        'teorico-menor': ['tag-ok', 'Teórico menor'],
+        'ok': ['tag-neutral', '—']
+    };
+
+    function filaDetalle(d) {
+        const [tc, tn] = notaMap[d.nota] || ['tag-neutral', '—'];
+        return `<tr>
+            <td style="font-weight:500">${d.nombre}</td>
+            <td class="num">${fmt$(d.precioVigente)}</td>
+            <td class="num">${fmtPct(d.remTeorico)}</td>
+            <td class="num">${fmtPct(d.remReal)}</td>
+            <td class="num fw6">${fmtPct(d.remAplicado)}</td>
+            <td class="num">${d.factor ? d.factor.toFixed(4) : '—'}</td>
+            <td class="num fw6">${fmt$(d.adecuacion)}</td>
+            <td class="num fw6">${fmt$(d.ajusteOC ?? 0)}</td>
+            <td class="num fw6 ${(d.saldoReintegro ?? 0) > 0 ? 'text-ok' : (d.saldoReintegro ?? 0) < 0 ? 'text-danger' : ''}">${fmt$(d.saldoReintegro ?? 0)}</td>
+            <td><span class="tag ${tc}" style="font-size:10px">${tn}</span></td>
+        </tr>`;
+    }
+
+    const totalAdec = salto.detalleMod.reduce((s, d) => s + (d.adecuacion ?? 0), 0);
+    const totalAjuste = salto.detalleMod.reduce((s, d) => s + (d.ajusteOC ?? 0), 0);
+    const totalSaldo = salto.detalleMod.reduce((s, d) => s + (d.saldoReintegro ?? 0), 0);
+
+    document.getElementById('modal-detalle-salto-title').textContent =
+        `${entrada.modNombre} — Salto ${periodoLabel(periodo)}`;
+
+    document.getElementById('modal-detalle-salto-body').innerHTML = `
+        <div class="tbl-wrap">
+            <table>
+                <thead><tr>
+                    <th>Ítem</th><th>Precio vigente</th>
+                    <th>Rem. teórico</th><th>Rem. real</th><th>Rem. aplicado</th>
+                    <th>Factor IOP</th><th>Monto redet.</th>
+                    <th>Ajuste OC</th><th>Saldo reintegro</th><th>Nota</th>
+                </tr></thead>
+                <tbody>${salto.detalleMod.map(filaDetalle).join('')}</tbody>
+            </table>
+        </div>
+        <div style="display:flex;gap:24px;padding:12px 0 0">
+            <div>
+                <div style="font-size:11px;color:var(--text2)">Monto redeterminado</div>
+                <div style="font-size:18px;font-weight:600;font-family:var(--mono)">${fmt$(totalAdec)}</div>
+            </div>
+            <div>
+                <div style="font-size:11px;color:var(--text2)">Ajuste OC</div>
+                <div style="font-size:18px;font-weight:600;font-family:var(--mono);color:${totalAjuste >= 0 ? 'var(--ok)' : 'var(--danger)'}">${fmt$(totalAjuste)}</div>
+            </div>
+            <div>
+                <div style="font-size:11px;color:var(--text2)">Saldo reintegro</div>
+                <div style="font-size:18px;font-weight:600;font-family:var(--mono);color:${totalSaldo >= 0 ? 'var(--ok)' : 'var(--danger)'}">${fmt$(totalSaldo)}</div>
+            </div>
+        </div>`;
+
+    openModal('modal-detalle-salto');
 }

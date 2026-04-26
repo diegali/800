@@ -462,6 +462,131 @@ function descargarPlantillaReal() {
 
 function renderRealScreen() {
   renderRealTable();
+  renderGraficoAvance();
+}
+
+function renderGraficoAvance() {
+  const canvas = document.getElementById('grafico-avance');
+  if (!canvas) return;
+  if (!state.items.length || !state.real.length) {
+    canvas.style.display = 'none';
+    return;
+  }
+  canvas.style.display = 'block';
+
+  // Períodos con avance real
+  const periodosConReal = [...new Set(state.real.map(r => r.periodo))].sort();
+  if (!periodosConReal.length) { canvas.style.display = 'none'; return; }
+
+  // Períodos completos de la obra para el plan
+  const duracionDias = state.obra.duracionDias || 0;
+  const totalMeses = Math.ceil(duracionDias / 30);
+  const fechaReplanteo = state.obra.fechaReplanteo || null;
+  let periodosObra = [];
+  if (totalMeses > 0 && fechaReplanteo) {
+    for (let i = 0; i < totalMeses; i++) {
+      const [anio, mes] = fechaReplanteo.split('-').map(Number);
+      const fecha = new Date(anio, mes - 1 + i, 1);
+      periodosObra.push(`${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`);
+    }
+  } else {
+    for (let i = 0; i < totalMeses; i++) periodosObra.push(`MES-${i + 1}`);
+  }
+
+  // Labels: unión de períodos con real + todos los de la obra
+  const todosLosPeriodos = [...new Set([...periodosConReal, ...periodosObra])].sort();
+
+  const totalContrato = state.items.reduce((s, i) => s + i.cantidad * i.precio, 0);
+
+  // Por cada período: suma ponderada acumulada de plan y real
+  let acumPlanVal = 0, acumRealVal = 0;
+  const dataPlanMap = {};
+  const dataRealMap = {};
+
+  todosLosPeriodos.forEach(p => {
+    let planPeriodo = 0;
+    state.items.forEach(item => {
+      const cv = item.cantidad;
+      if (cv === 0) return;
+      const planEntry = state.plan.find(x => x.itemId === item.id && x.periodo === p);
+      const cantPlan = planEntry ? planEntry.cantidad : 0;
+      planPeriodo += (cantPlan / cv) * (item.cantidad * item.precio / totalContrato);
+    });
+    acumPlanVal += planPeriodo;
+    dataPlanMap[p] = Math.round(acumPlanVal * 10000) / 100;
+  });
+
+  periodosConReal.forEach(p => {
+    let realPeriodo = 0;
+    state.items.forEach(item => {
+      const cv = item.cantidad;
+      if (cv === 0) return;
+      const realEntry = state.real.find(x => x.itemId === item.id && x.periodo === p);
+      const cantReal = realEntry ? realEntry.cantidad : 0;
+      realPeriodo += (cantReal / cv) * (item.cantidad * item.precio / totalContrato);
+    });
+    acumRealVal += realPeriodo;
+    dataRealMap[p] = Math.round(acumRealVal * 10000) / 100;
+  });
+
+  const dataPlan = todosLosPeriodos.map(p => dataPlanMap[p] ?? null);
+  const dataReal = todosLosPeriodos.map(p => dataRealMap[p] ?? null);
+  const labels = todosLosPeriodos.map(p => periodoLabel(p));
+
+  // Destruir gráfico anterior si existe
+  if (window._graficoAvance) window._graficoAvance.destroy();
+
+  window._graficoAvance = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Plan acumulado %',
+          data: dataPlan,
+          borderColor: '#C9A84C',
+          backgroundColor: 'rgba(201,168,76,0.12)',
+          borderWidth: 2,
+          pointRadius: 4,
+          fill: true,
+          tension: 0.3
+        },
+        {
+          label: 'Real acumulado %',
+          data: dataReal,
+          borderColor: '#2d7a4f',
+          backgroundColor: 'rgba(45,122,79,0.10)',
+          borderWidth: 2,
+          pointRadius: 4,
+          fill: true,
+          tension: 0.3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}%`
+          }
+        }
+      },
+      scales: {
+        y: {
+          min: 0,
+          max: 100,
+          ticks: { callback: v => v + '%' },
+          grid: { color: 'rgba(0,0,0,0.06)' }
+        },
+        x: {
+          grid: { color: 'rgba(0,0,0,0.04)' }
+        }
+      }
+    }
+  });
 }
 
 function renderRealTable() {

@@ -149,6 +149,7 @@ async function descargarTodoDeNube() {
             if (!state.modificaciones) state.modificaciones = [];
             if (!state.planMod) state.planMod = [];
             if (!state.realMod) state.realMod = [];
+            if (!state.adecuacionesMod) state.adecuacionesMod = [];
             window.state = state;
             setObraActivaId(state.id);
         } else {
@@ -163,6 +164,7 @@ async function descargarTodoDeNube() {
         if (typeof renderSelectorObras === 'function') renderSelectorObras();
         if (typeof renderTopbarObra === 'function') renderTopbarObra();
         if (typeof renderResumen === 'function') renderResumen();
+
 
         document.body.classList.remove('app-cargando');
         console.log("Datos descargados. Obras:", obras.length);
