@@ -1,16 +1,12 @@
-Aquí está el contexto actualizado:
-
----
-
 # Redeterminaciones 800/16 — Decreto 1082/17
-## Contexto técnico — v23
+## Contexto técnico — v25
 *Provincia de Córdoba*
 
 ---
 
 ## Inicio rápido
 Al iniciar chat nuevo:
-> *"Leíste el contexto de la app Redeterminaciones 800/16 v23. Quiero continuar el desarrollo. [describí qué querés hacer]"*
+> *"Leíste el contexto de la app Redeterminaciones 800/16 v25. Quiero continuar el desarrollo. [describí qué querés hacer]"*
 
 **Modo de trabajo:** usuario principiante. Solo código listo para copiar/pegar, mínima explicación.
 
@@ -19,7 +15,7 @@ Al iniciar chat nuevo:
 ## Stack
 - Vanilla HTML/CSS/JS modular (scripts normales, no ES modules)
 - Firebase Firestore + Auth (Google popup) — SDK v10 gstatic
-- SheetJS CDN `xlsx/0.18.5` para importación/exportación Excel
+- SheetJS CDN `xlsx/0.18.5`
 - Chart.js CDN `4.4.1` — usado en avance real
 - PWA: `sw.js` + `manifest.json` — rutas relativas a `/800/` en GitHub Pages
 - GitHub Pages: `https://diegali.github.io/800/`
@@ -36,15 +32,14 @@ js/
     resumen.js · estructura.js · versiones.js
     plan.js · iop.js · adecuaciones.js
 ```
-`auth.js` — ignorar, roto y sin uso.
 
 ---
 
 ## Firestore
 ```
-usuarios/{uid}/obras/{obraId}     ← obra completa (sin IOP)
-usuarios/{uid}/iop/cordoba        ← { datos: {YYYY-MM: {factor: valor}}, orden: {nombre: nro}, ultimaEdicion }
-licencias/{uid}                   ← { activa: bool, vencimiento: "YYYY-MM-DD", plan: "pro" }
+usuarios/{uid}/obras/{obraId}
+usuarios/{uid}/iop/cordoba
+licencias/{uid}  ← { activa: bool, vencimiento: "YYYY-MM-DD", plan: "pro" }
 ```
 
 ---
@@ -53,117 +48,120 @@ licencias/{uid}                   ← { activa: bool, vencimiento: "YYYY-MM-DD",
 | Variable | Contenido |
 |---|---|
 | `window.state` | Obra activa |
-| `window.obras` | Array de todas las obras del usuario |
+| `window.obras` | Array de todas las obras |
 | `window.iopGlobal` | `{YYYY-MM: {factor: valor}}` |
 | `window.iopOrden` | `{nombreFactor: nroOrden}` |
-
----
-
-## Licencias
-- Verificación en `state.js` dentro de `onAuthStateChanged`
-- Si no existe doc en `licencias/{uid}`, está inactiva o venció → muestra `pantalla-licencia`
-- `vencimiento` se guarda como string `"YYYY-MM-DD"`
-- En caso de error de lectura → bloquea acceso
 
 ---
 
 ## Estructura de obra (`obraVacia()`)
 ```
 id, fechaCreacion
-obra: { nombre, expediente, fecha, fechaApertura, fechaReplanteo, contratista, duracionDias,
-        anticipoPct, anticipoPeriodo }
-items[]:          { id, nombre, unidad, cantidad, precio, precioOficial, factores[] }
-modificaciones[]: ver estructura abajo
-planMod[]:        { modId, itemId, periodo(YYYY-MM), cantidad }
-realMod[]:        { modId, itemId, periodo(YYYY-MM), cantidad }
-plan[]:           { itemId, periodo(YYYY-MM), cantidad }
-real[]:           { itemId, periodo(YYYY-MM), cantidad }
-adecuaciones[]:   { periodo, empresaPidio, decreto1082, superaGatillo, procede,
-                    iopBase, iopActual, basePeriodo, periodoCalculo,
-                    factor, total, detalle[],
-                    detalleMod[], totalMod }
-adecuacionesMod[]: { modId, modNombre, totalMod, totalAjusteOC, detalleMod[], saltos[] }
+obra: { nombre, expediente, fecha, fechaApertura, fechaReplanteo, contratista,
+        duracionDias, anticipoPct, anticipoPeriodo }
+items[]:            { id, nro, nombre, unidad, cantidad, precio, precioOficial, factores[] }
+modificaciones[]:   ver estructura abajo
+planMod[]:          { modId, itemId, periodo, cantidad }
+realMod[]:          { modId, itemId, periodo, cantidad }
+plan[]:             { itemId, periodo, cantidad }
+real[]:             { itemId, periodo, cantidad }
+planesHistoricos[]: { id, nombre, fecha, plan[], planMod[] }
+adecuaciones[]:     { periodo, empresaPidio, decreto1082, superaGatillo, procede,
+                      iopBase, iopActual, basePeriodo, periodoCalculo,
+                      factor, total, detalle[], detalleMod[], totalMod }
+adecuacionesMod[]:  { modId, modNombre, totalMod, totalAjusteOC, detalleMod[], saltos[] }
 gatillo: 10
 iopBase: YYYY-MM
 nextId: 1
 ```
 
-Compatibilidad (en `descargarTodoDeNube`):
+### `detalle[]` por ítem
+```javascript
+{ itemId, nro, nombre, precioVigente, precioRedeterminado, precioProvisorio,
+  remTeorico, remReal, remAplicado, nota, factor, adecuacion, ajusteOC, saldoReintegro }
+```
+
+### `detalleMod[]` por ítem
+```javascript
+{ modId, modNombre, itemId, nro, nombre, precioVigente, precioRedeterminado, precioProvisorio,
+  remTeorico, remReal, remAplicado, nota, factor, adecuacion, ajusteOC, saldoReintegro }
+```
+
+### Compatibilidad (en `descargarTodoDeNube`)
 ```javascript
 if (!state.modificaciones) state.modificaciones = [];
 if (!state.planMod) state.planMod = [];
 if (!state.realMod) state.realMod = [];
 if (!state.adecuacionesMod) state.adecuacionesMod = [];
+if (!state.planesHistoricos) state.planesHistoricos = [];
+// Migrar nro en ítems de modificaciones sin nro
+(state.modificaciones || []).forEach(mod => {
+    (mod.items || []).forEach(itemMod => {
+        if (itemMod.nro !== undefined) return;
+        if (itemMod.esNuevo) {
+            const totalBase = state.items.length;
+            const nuevosAnteriores = state.modificaciones.flatMap(m => m.items)
+                .filter(i => i.esNuevo && i.id < itemMod.id).length;
+            itemMod.nro = totalBase + nuevosAnteriores + 1;
+        } else {
+            const itemBase = state.items.find(i => i.id === itemMod.itemIdBase);
+            if (itemBase) itemMod.nro = `${itemBase.nro}.1`;
+        }
+    });
+});
 ```
 
 ---
 
-## Módulo Modificaciones de Obra (`versiones.js`)
+## Numeración de ítems
+- `item.nro` — correlativo entero (1, 2, 3...) — se guarda al importar
+- `itemMod.nro` — demasías: `"X.1"` · ítems nuevos: correlativo al final
+- Economías: sin nro propio
+- Se muestra en todas las pantallas concatenado con el nombre en una sola columna
+- En detalle adecuaciones: `max-width:180px`, `text-overflow:ellipsis`, tooltip `title`
+- Fallback en render: busca en `state.items` o `state.modificaciones` si no está en detalle
 
-### Estructura de una modificación
+---
+
+## Módulo Modificaciones (`versiones.js`)
+
+### Estructura
 ```javascript
 {
-  id,           // timestamp
-  nombre,
-  periodo,      // YYYY-MM — fecha de aplicación
-  items: [
-    {
-      id, itemIdBase, nombre, unidad,
-      cantidad,     // + demasía / − economía
-      precio, precioOficial, factores, esNuevo
-    }
-  ]
+  id, nombre, periodo,
+  items: [{ id, nro, itemIdBase, nombre, unidad, cantidad, precio, precioOficial, factores, esNuevo }]
 }
 ```
 
-### Tipos de ítems
-| Tipo | `itemIdBase` | `cantidad` | Plan | Redeterminación |
-|---|---|---|---|---|
-| Demasía | id del base | positiva | `planMod` | con remanente |
-| Economía | id del base | negativa | no | 100% (rem=1) |
-| Ítem nuevo | null | positiva | `planMod` | con remanente |
+### Tipos
+| Tipo | `nro` | Plan | Redeterminación |
+|---|---|---|---|
+| Demasía | `"X.1"` | `planMod` | con remanente |
+| Economía | sin nro | no | 100% (rem=1) |
+| Ítem nuevo | correlativo final | `planMod` | con remanente |
 
-### Funciones clave `versiones.js`
-- `nuevaModificacion()` / `crearModificacion()` — crear modificación
-- `abrirDetalleMod(id)` — abrir modal detalle
-- `agregarItemMod()` — agregar ítem a modificación
-- `eliminarItemMod(itemId)` / `eliminarModificacion()` — eliminar
-- `renderDetalleModTabla(mod)` — tabla de ítems en modal
-- `renderVersiones()` — lista de modificaciones en pantalla
-- `descargarPlantillaPlanMod(modId)` — plantilla Excel plan mod
-- `handlePlanModExcel(event, modId)` / `procesarPlanModExcel(rows, modId)` — importar plan mod
+### Funciones clave
+- `crearModificacion()`, `abrirDetalleMod(id)`, `agregarItemMod()`, `eliminarItemMod()`, `eliminarModificacion()`
+- `renderDetalleModTabla(mod)`, `renderVersiones()`
+- `descargarPlantillaPlanMod(modId)`, `handlePlanModExcel(event, modId)`, `procesarPlanModExcel(rows, modId)`
+- `calcularAdecuacionAcumuladaMod(modId, hastaPeriodo)` — calcula saltos faltantes, respeta calculados
+- `calcularAdecuacionAcumuladaMod_desde_gatillo()` — wrapper
+- `verDetalleSaltoMod(modId, periodo)` — modal detalle salto individual
 
-### Adecuación acumulada de modificaciones
-- `calcularAdecuacionAcumuladaMod(modId, hastaPeriodo)` — calcula saltos faltantes hasta `hastaPeriodo`, respeta saltos ya calculados
-- `calcularAdecuacionAcumuladaMod_desde_gatillo()` — wrapper para una sola modificación
-- `verDetalleSaltoMod(modId, periodo)` — abre modal con detalle del salto individual
-- Estructura `adecuacionesMod[]`: una entrada por modificación con `saltos[]` y totales acumulados
-- Botón **+ Mod.** en tabla gatillo por cada período de obra base calculado sin salto → al clickear calcula todos los saltos faltantes hasta ese período
-- Botón **Detalle mod.** en períodos con salto ya calculado
+### Botones en tabla gatillo
+- **+ Mod.** — períodos sin salto → calcula faltantes hasta ese período
+- **Detalle mod.** — períodos con salto → abre modal
 
 ---
 
 ## engine.js
-### `cantidadVigente(itemId, periodo)`
-- Suma `item.cantidad` original + cambios de modificaciones aplicadas hasta `periodo`
-- Resultado redondeado a 4 decimales
-- ⚠️ Solo para mostrar en tablas, NO usar en cálculos de redeterminación
-
-### `remanente(itemId, periodo)`
-- Usa `item.cantidad` original (no vigente)
-- `cv = item.cantidad`
-
-### `remanenteMod(mod, itemMod, periodo)`
-- Economías (`cantidad < 0`): siempre `{teorico:1, real:1, aplicado:1, nota:'economia'}`
-- Demasías/nuevos: usa `acumPlanMod` y `acumRealMod`
-
-### Funciones engine
 | Función | Descripción |
 |---|---|
-| `acumPlan(itemId, hasta)` | Suma plan base |
-| `acumReal(itemId, hasta)` | Suma real base |
-| `acumPlanMod(modId, itemId, hasta)` | Suma planMod |
-| `acumRealMod(modId, itemId, hasta)` | Suma realMod |
+| `cantidadVigente(itemId, periodo)` | Solo display, NO cálculos |
+| `remanente(itemId, periodo)` | Usa `item.cantidad` original |
+| `remanenteMod(mod, itemMod, periodo)` | Economías rem=1, otros usa planMod/realMod |
+| `acumPlan/Real(itemId, hasta)` | Plan/real base |
+| `acumPlanMod/RealMod(modId, itemId, hasta)` | Plan/real modificación |
 | `calcIopBase(periodo)` | Última adec. que procede antes del período |
 | `periodoLabel(p)` | `YYYY-MM` → `"Mes YYYY"` |
 | `fmt$(n)` / `fmtPct(n)` | Formateo moneda AR / porcentaje |
@@ -171,37 +169,63 @@ if (!state.adecuacionesMod) state.adecuacionesMod = [];
 ---
 
 ## adecuaciones.js
-### Separación obra base / modificaciones
 - Obra base: `cv = item.cantidad` original
 - Modificaciones: `cv = itemMod.cantidad` (con signo)
-- `calcularDetalleMod(periodo, periodoCalculo, basePeriodo, factorGlobal, adecAnterior, procede, decreto1082, anticipo)` — función centralizada
-- `recalcularConMod(periodo)` — recalcula `detalleMod` de una adecuación individual
-- `registrarAdecuacionDirecta` — deja `detalleMod: []` vacío
+- `calcularDetalleMod(...)` — función centralizada
+- `recalcularConMod(periodo)` — recalcula `detalleMod` individual
+- `registrarAdecuacionDirecta` — deja `detalleMod: []`
+- Anticipo solo en economías: `periodo > anticipoPeriodo && itemMod.cantidad < 0`
 
-### Anticipo en modificaciones
-```javascript
-const aplicarAnticipoMod = anticipo > 0 && state.obra.anticipoPeriodo
-    && periodo > state.obra.anticipoPeriodo && itemMod.cantidad < 0;
-```
+### `mostrarDetalle(idx)`
+- Tabla obra base: `detalle[]` con nro+nombre
+- Tabla modificaciones: detalle acumulado de `adecuacionesMod` sumando saltos por ítem
+- Título mod: `"Modificación 1 — Adec. 1 y 2 · Sep 2025"`
+- Sección acumulada: `totalAjusteOC`, solo si hay saltos
 
 ### Tabla gatillo — columnas
 Período · Variación · Base activa · Estado · Acción
 
-### `mostrarDetalle(idx)`
-- Muestra detalle obra base + modificaciones
-- Sección "Modificaciones de obra": usa detalle acumulado de `adecuacionesMod` si existe, sumando todos los saltos por ítem
-- Título: `"Modificación 1 — Adec. 1 y 2 · Sep 2025"`
-- Sección "Adecuación acumulada": muestra `totalAjusteOC` acumulado, solo si `adecuacionesMod` tiene saltos
-
 ---
 
 ## plan.js
-- `cv = item.cantidad` para % ejecutado
-- `renderRealScreen()` llama a `renderRealTable()` + `renderGraficoAvance()`
-- `renderGraficoAvance()` — gráfico Chart.js línea, plan vs real acumulado %
-  - Plan: todos los períodos de la obra (hasta el último)
-  - Real: solo períodos con datos
-  - Instancia guardada en `window._graficoAvance` (se destruye antes de recrear)
+
+### Plan de avance
+- `renderPlanScreen()` → `renderPlanTable()` + `renderPlanesHistoricos()`
+- `renderPlanTable()` — muestra ítems base + demasías/nuevos intercalados:
+  - Ítems base: fondo normal
+  - Demasías/nuevos: fondo `var(--surface2)`
+  - Demasías aparecen debajo de su ítem base
+  - Ítems nuevos al final
+  - Períodos: unión de `state.plan` + `state.planMod`
+
+### Importación de plan
+- `procesarPlanExcel(data)` — detecta columna Nº (nueva plantilla) o sin nro (vieja)
+  - Matchea por nro primero (mod antes que base), luego por nombre como fallback
+  - Ítems base → `nuevasPlan[]`, ítems mod → `nuevasPlanMod[]`
+  - Abre modal `modal-nombre-plan` para confirmar
+- `confirmarNuevoPlan()`:
+  - Guarda plan actual en `planesHistoricos[]` (incluye `planMod`)
+  - Toma todo del Excel sin corte
+  - Actualiza `state.plan` y `state.planMod`
+
+### Plantilla Excel
+- `descargarPlantilla()` — incluye ítems base + demasías/nuevos de modificaciones
+  - Columna Nº agregada (col 0)
+  - Demasías aparecen debajo de su ítem base
+  - Ítems nuevos al final
+
+### Historial de planes
+- `renderPlanesHistoricos()` — lista con botones Restaurar y ✕
+- `restaurarPlanHistorico(id)` — reemplaza `state.plan` y `state.planMod`
+- `eliminarPlanHistorico(id)`
+
+### Gráfico avance
+- `renderGraficoAvance()` — Chart.js línea, plan completo vs real períodos con datos
+- Instancia en `window._graficoAvance`
+
+### Avance real
+- `renderRealScreen()` → `renderRealTable()` + `renderGraficoAvance()`
+- Tabla: nro+nombre concatenados
 
 ---
 
@@ -212,35 +236,27 @@ Período · Variación · Base activa · Estado · Acción
 | `r-vigente` | Nuevo monto de contrato |
 | `r-adecuado` | Ajuste OC acumulado |
 | `r-saldo` | Saldo a integrar |
-
-⚠️ Pendiente: incluir `totalAjusteOC` de `adecuacionesMod` en los totales
+⚠️ Pendiente: incluir `totalAjusteOC` de `adecuacionesMod`
 
 ---
 
 ## CSS / UI
-### Paleta
-- `--bg: #FAF8F2` · `--surface: #FFFFFF` · `--surface2: #F5F2EA` · `--accent-mid: #C9A84C`
-- `.nav-item.active` → `background:#C9A84C; color:#0D0D0D`
-
-### Modales nueva/editar obra
-- `max-width:580px;width:95%;overflow:hidden`
-- Grid fechas: `repeat(3,minmax(0,1fr))`
-- Anticipo en card `surface2` con % grande en `accent-mid`
-- Labels en uppercase 10px
+- Paleta: `--bg:#FAF8F2` · `--surface:#FFFFFF` · `--surface2:#F5F2EA` · `--accent-mid:#C9A84C`
+- Modales nueva/editar obra: `max-width:580px;width:95%;overflow:hidden`
 
 ---
 
 ## Pendiente
-- Exportar adecuación a Excel (incluir detalleMod y totales combinados)
+- Exportar adecuación a Excel (con detalleMod y totales)
 - Backup JSON
 - `renderIOPEstado()`: variación acumulada correcta
 - PDF informe adecuación
 - Modo auditoría
 - Redeterminación definitiva
-- FAP (0.95) hardcodeado
-- Validación plan sume 100% por ítem
+- FAP hardcodeado (0.95)
+- Validación plan sume 100%
 - Resumen: incluir `totalAjusteOC` de `adecuacionesMod`
-- Plan de modificación: tabla en pantalla separada
+- Avance real: incluir ítems de modificaciones (igual que plan)
 - Múltiples modificaciones: análisis pendiente
 
 ---
@@ -248,28 +264,26 @@ Período · Variación · Base activa · Estado · Acción
 ## Glosario
 | Término | Definición |
 |---|---|
-| VRI | Variación acumulada ponderada por polinómica |
-| Gatillo | VRI mínimo para adecuación (default 10%) |
-| FAP | Factor de Adecuación Provisional = 0.95 |
+| VRI | Variación acumulada ponderada |
+| Gatillo | VRI mínimo (default 10%) |
+| FAP | Factor Adecuación Provisional = 0.95 |
 | `periodoCalculo` | Período anterior al registrado |
 | `basePeriodo` | Período base activo |
-| `adecuacion` | Monto redeterminado bruto por ítem |
-| `ajusteOC` | Monto a pagar en orden de compra |
+| `adecuacion` | Monto redeterminado bruto |
+| `ajusteOC` | Monto a pagar en OC |
 | `saldoReintegro` | adecuacion - ajusteOC |
-| `precioRedeterminado` | Base para la próxima adecuación |
-| `precioProvisorio` | Base para calcular ajusteOC incremental |
-| `precio` | Precio de oferta |
-| `precioOficial` | Precio presupuesto oficial — solo ponderadores |
-| `anticipoPct` | Porcentaje anticipo financiero |
-| `anticipoPeriodo` | Período desde que aplica (`periodo > anticipoPeriodo`) |
-| Rem. aplicado | MIN(teórico, real) — salvo decreto 1082 |
-| Decreto 1082 | Penalizados/teorico-menor usan remReal |
-| Demasía | Aumento de cantidad en modificación |
-| Economía | Disminución de cantidad (negativa) |
-| `planMod[]` | Plan de avance de demasías/nuevos |
-| `realMod[]` | Avance real de demasías/nuevos |
-| `detalleMod[]` | Detalle adecuación ítems de modificaciones |
-| `adecuacionesMod[]` | Adecuaciones acumuladas de modificaciones |
-| `saltos[]` | Detalle por período dentro de `adecuacionesMod` |
-| fechaApertura | Inicio del cálculo del gatillo |
+| `precioRedeterminado` | Base próxima adecuación |
+| `precioProvisorio` | Base ajusteOC incremental |
+| `precio` | Precio oferta |
+| `precioOficial` | Solo ponderadores polinómica |
+| `anticipoPct/Periodo` | Anticipo financiero |
+| Rem. aplicado | MIN(teórico, real) salvo Dec.1082 |
+| Demasía | Aumento cantidad en modificación |
+| Economía | Disminución cantidad (negativa) |
+| `planMod/realMod` | Plan/real de modificaciones |
+| `detalleMod` | Detalle adecuación modificaciones |
+| `adecuacionesMod` | Adecuaciones acumuladas mods |
+| `saltos[]` | Detalle por período en adecuacionesMod |
+| `planesHistoricos` | Versiones anteriores del plan |
+| fechaApertura | Inicio cálculo gatillo |
 | fechaReplanteo | Inicio real de obra |

@@ -301,6 +301,20 @@
                                 </table>
                             </div>
                         </div>
+                        <div class="card" style="margin-top:16px" id="card-planes-historicos">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Historial de planes</div>
+                                <div class="card-sub">Versiones anteriores del plan de avance</div>
+                            </div>
+                        </div>
+                        <div id="planes-historicos-list"></div>
+                        <div id="planes-historicos-empty" class="empty">
+                            <div class="empty-icon">▦</div>
+                            <div class="empty-title">Sin historial</div>
+                            <div class="empty-sub">Los planes anteriores aparecerán aquí</div>
+                        </div>
+                    </div>
 
                     </div>
 
@@ -670,6 +684,29 @@
         </div>
     </div>
 
+    <!-- Nuevo Plan -->
+
+    <div class="modal-overlay" id="modal-nombre-plan">
+    <div class="modal" style="max-width:480px;width:95%">
+        <div class="modal-head">
+            <div class="modal-title">Nuevo plan de avance</div>
+            <button class="modal-close" onclick="closeModal('modal-nombre-plan')">×</button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:16px">
+            <div class="form-group">
+                <label style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2)">Nombre del plan</label>
+                <input type="text" id="plan-nombre-input" placeholder="Ej: Ampliación de plazo N°1">
+            </div>
+            <div id="plan-aviso-adec" style="display:none;background:var(--surface2);border-radius:8px;padding:12px;font-size:12px;color:var(--text2)">
+                ℹ️ Las cantidades hasta <strong id="plan-aviso-periodo"></strong> se tomarán del avance real registrado.
+            </div>
+        </div>
+        <div class="modal-foot">
+            <button class="btn" onclick="closeModal('modal-nombre-plan')">Cancelar</button>
+            <button class="btn btn-primary" onclick="confirmarNuevoPlan()">Cargar plan</button>
+        </div>
+    </div>
+</div>
 
     <!-- Estructura costos detalle (ver) -->
     <div class="modal-overlay" id="modal-ver-estructura">

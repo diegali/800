@@ -211,6 +211,7 @@ function calcularDetalleMod(periodo, periodoCalculo, basePeriodo, factorGlobal, 
             detalleMod.push({
                 modId: mod.id, modNombre: mod.nombre,
                 itemId: itemMod.id, nombre: itemMod.nombre,
+                nro: itemMod.nro,
                 precioVigente, precioRedeterminado, precioProvisorio,
                 remTeorico: rem.teorico, remReal: rem.real, remAplicado: rem.aplicado,
                 nota: rem.nota, factor, adecuacion, ajusteOC, saldoReintegro
@@ -283,7 +284,8 @@ function registrarAdecuacionDirecta(periodo) {
         }
         total += adecuacion;
         return {
-            itemId: item.id, nombre: item.nombre, precioVigente, precioRedeterminado, precioProvisorio,
+            itemId: item.id, nombre: item.nombre, nro: item.nro,
+            precioVigente, precioRedeterminado, precioProvisorio,
             remTeorico: rem.teorico, remReal: rem.real, remAplicado: rem.aplicado,
             nota: rem.nota, factor, adecuacion, ajusteOC, saldoReintegro
         };
@@ -366,10 +368,12 @@ function mostrarDetalle(idx) {
 
     function filaDetalle(d) {
         const [tc, tn] = notaMap[d.nota] || ['tag-neutral', '—'];
+        const nroMostrar = d.nro
+            || state.items.find(i => i.id === d.itemId)?.nro
+            || state.modificaciones.flatMap(m => m.items).find(i => i.id === d.itemId)?.nro
+            || '';
         return `<tr>
-            <td style="font-weight:500">${d.nombre}</td>
-            <td class="num">${fmt$(d.precioVigente)}</td>
-            <td class="num">${fmtPct(d.remTeorico)}</td>
+    <td style="font-weight:500;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${d.nombre}"><span style="color:var(--text2);font-size:11px;margin-right:6px">${nroMostrar}</span>${d.nombre}</td><td class="num">${fmtPct(d.remTeorico)}</td>
             <td class="num">${fmtPct(d.remReal)}</td>
             <td class="num fw6">${fmtPct(d.remAplicado)}</td>
             <td class="num">${d.factor ? d.factor.toFixed(4) : '—'}</td>
@@ -681,7 +685,8 @@ function guardarAdecuacion() {
         }
         total += adecuacion;
         return {
-            itemId: item.id, nombre: item.nombre, precioVigente, precioRedeterminado, precioProvisorio,
+            itemId: item.id, nombre: item.nombre, nro: item.nro,
+            precioVigente, precioRedeterminado, precioProvisorio,
             remTeorico: rem.teorico, remReal: rem.real, remAplicado: rem.aplicado,
             nota: rem.nota, factor, adecuacion, ajusteOC, saldoReintegro
         };
@@ -960,10 +965,12 @@ function verDetalleSaltoMod(modId, periodo) {
 
     function filaDetalle(d) {
         const [tc, tn] = notaMap[d.nota] || ['tag-neutral', '—'];
+        const nroMostrar = d.nro
+            || state.items.find(i => i.id === d.itemId)?.nro
+            || state.modificaciones.flatMap(m => m.items).find(i => i.id === d.itemId)?.nro
+            || '';
         return `<tr>
-            <td style="font-weight:500">${d.nombre}</td>
-            <td class="num">${fmt$(d.precioVigente)}</td>
-            <td class="num">${fmtPct(d.remTeorico)}</td>
+    <td style="font-weight:500;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${d.nombre}"><span style="color:var(--text2);font-size:11px;margin-right:6px">${nroMostrar}</span>${d.nombre}</td><td class="num">${fmtPct(d.remTeorico)}</td>
             <td class="num">${fmtPct(d.remReal)}</td>
             <td class="num fw6">${fmtPct(d.remAplicado)}</td>
             <td class="num">${d.factor ? d.factor.toFixed(4) : '—'}</td>

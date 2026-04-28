@@ -80,6 +80,7 @@ function agregarItemMod() {
 
         mod.items.push({
             id: Date.now(),
+            nro: `${item.nro}.1`,
             itemIdBase,
             nombre: item.nombre,
             unidad: item.unidad,
@@ -98,8 +99,16 @@ function agregarItemMod() {
         if (isNaN(cantidad) || cantidad <= 0) return alert('La cantidad debe ser mayor a 0.');
         if (isNaN(precio) || precio <= 0) return alert('El precio es obligatorio.');
 
+        // Calcular nro correlativo: items base + items nuevos anteriores en todas las mods
+        const totalItemsBase = state.items.length;
+        const nuevosAnteriores = (state.modificaciones || [])
+            .flatMap(m => m.items)
+            .filter(i => i.esNuevo).length;
+        const nroNuevo = totalItemsBase + nuevosAnteriores + 1;
+
         mod.items.push({
             id: Date.now(),
+            nro: nroNuevo,
             itemIdBase: null,
             nombre,
             unidad: unidad || 'gl',

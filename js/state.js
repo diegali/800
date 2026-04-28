@@ -9,7 +9,7 @@ function obraVacia() {
         id: Date.now(),
         fechaCreacion: new Date().toISOString().slice(0, 7),
         obra: { nombre: '', expediente: '', fecha: '', fechaApertura: '', contratista: '' },
-        items: [], modificaciones: [], planMod: [], realMod: [], plan: [], real: [], adecuaciones: [],
+        items: [], modificaciones: [], planMod: [], realMod: [], plan: [], real: [], planesHistoricos: [], adecuaciones: [],
         gatillo: 10, iopBase: null, nextId: 1
     };
 }
@@ -150,6 +150,24 @@ async function descargarTodoDeNube() {
             if (!state.planMod) state.planMod = [];
             if (!state.realMod) state.realMod = [];
             if (!state.adecuacionesMod) state.adecuacionesMod = [];
+            if (!state.planesHistoricos) state.planesHistoricos = [];
+            // Migrar nro en ítems de modificaciones
+            (state.modificaciones || []).forEach(mod => {
+                (mod.items || []).forEach(itemMod => {
+                    if (itemMod.nro !== undefined) return; // ya tiene nro
+                    if (itemMod.esNuevo) {
+                        // Correlativo: items base + nuevos anteriores
+                        const totalBase = state.items.length;
+                        const nuevosAnteriores = (state.modificaciones || [])
+                            .flatMap(m => m.items)
+                            .filter(i => i.esNuevo && i.id < itemMod.id).length;
+                        itemMod.nro = totalBase + nuevosAnteriores + 1;
+                    } else {
+                        const itemBase = state.items.find(i => i.id === itemMod.itemIdBase);
+                        if (itemBase) itemMod.nro = `${itemBase.nro}.1`;
+                    }
+                });
+            });
             window.state = state;
             setObraActivaId(state.id);
         } else {
