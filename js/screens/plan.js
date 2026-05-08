@@ -256,6 +256,7 @@ function descargarPlantilla() {
   XLSX.utils.book_append_sheet(wb, ws, 'Plan de Avance');
   XLSX.writeFile(wb, `plan_avance_${state.obra.nombre || 'obra'}.xlsx`);
 }
+
 function cargarPlanExcel(event) {
   const file = event.target.files[0];
   const reader = new FileReader();
@@ -263,7 +264,7 @@ function cargarPlanExcel(event) {
     const data = new Uint8Array(e.target.result);
     const workbook = XLSX.read(data, { type: 'array' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
     procesarPlanExcel(json);
   };
   reader.readAsArrayBuffer(file);
@@ -341,8 +342,8 @@ function procesarPlanExcel(data) {
     }
 
     columnasMeses.forEach((col, idx) => {
+      const raw = fila[colPrimerMes + idx];
       const cantidad = parseFloat(fila[colPrimerMes + idx]);
-      if (isNaN(cantidad) || cantidad === 0) return;
       let periodo;
       if (/^\d{4}-\d{2}$/.test(String(col))) {
         periodo = String(col);
@@ -480,42 +481,54 @@ function cargarRealExcel(event) {
 }
 
 function procesarRealExcel(data) {
+  console.log('headers:', data[0]);
+  console.log('fila1:', data[1]);
+  console.log('tieneNro:', String(data[0][0] || '').trim().replace(/[^a-zA-Z0-9]/g, '') === 'N');
+  // ... resto igual
   const headers = data[0];
-  const filas = data.slice(1).filter(f => f[0]);
-
+  const tieneNro = headers[0] === 'Nº';
+  const colNombre = tieneNro ? 1 : 0;
+  const colPrimerMes = tieneNro ? 4 : 3;
+  const filas = data.slice(1).filter(f => f[colNombre]);
   const idxTotal = headers.indexOf('Total real');
   const colFin = idxTotal > 0 ? idxTotal : headers.length;
-  const columnasMeses = headers.slice(3, colFin);
-
+  const columnasMeses = headers.slice(colPrimerMes, colFin);
   const fechaReplanteo = state.obra.fechaReplanteo || null;
   let nuevasReal = [];
   let errores = [];
 
+  // Mapa nro → item
+  const mapaBase = {};
+  state.items.forEach(item => {
+    if (item.nro !== undefined && item.nro !== null) mapaBase[String(item.nro)] = item;
+    mapaBase[item.nombre.trim()] = item;
+  });
+
   filas.forEach(fila => {
-    const nombreFila = String(fila[0] || '').trim();
-    const item = state.items.find(i => i.nombre.trim() === nombreFila);
-    if (!item) {
+    const nroFila = tieneNro ? String(fila[0] ?? '').trim() : null;
+    const nombreFila = String(fila[colNombre] || '').trim();
+    let item = null;
+    if (nroFila && mapaBase[nroFila]) {
+      item = mapaBase[nroFila];
+    } else if (mapaBase[nombreFila]) {
+      item = mapaBase[nombreFila];
+    } else {
       errores.push(nombreFila);
       return;
     }
-
     columnasMeses.forEach((col, idx) => {
-      const cantidad = parseFloat(fila[3 + idx]);
+      const cantidad = parseFloat(fila[colPrimerMes + idx]);
       if (isNaN(cantidad) || cantidad === 0) return;
-
       let periodo;
       if (/^\d{4}-\d{2}$/.test(String(col))) {
         periodo = String(col);
       } else if (fechaReplanteo) {
         const [anioBase, mesBase] = fechaReplanteo.split("-").map(Number);
         const fecha = new Date(anioBase, mesBase - 1 + idx, 1);
-        const yyyy = fecha.getFullYear();
-        const mm = String(fecha.getMonth() + 1).padStart(2, "0");
-        periodo = `${yyyy}-${mm}`;
+        periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
       } else {
         periodo = `MES-${idx + 1}`;
       }
-
       nuevasReal.push({ itemId: item.id, periodo, cantidad });
     });
   });
@@ -523,17 +536,19 @@ function procesarRealExcel(data) {
   if (errores.length) {
     alert(`Atención: estos ítems no coinciden y fueron ignorados:\n${errores.join('\n')}`);
   }
-
-  const itemsEnExcel = filas.map(f => state.items.find(i => i.nombre.trim() === String(f[0] || '').trim())).filter(Boolean);
+  const itemsEnExcel = filas
+    .map(f => {
+      const nro = tieneNro ? String(f[0] ?? '').trim() : null;
+      const nombre = String(f[colNombre] || '').trim();
+      return (nro && mapaBase[nro]) ? mapaBase[nro] : mapaBase[nombre];
+    })
+    .filter(Boolean);
   itemsEnExcel.forEach(item => { state.real = state.real.filter(r => r.itemId !== item.id); });
-
   nuevasReal.forEach(nr => {
     state.real = state.real.filter(r => !(r.itemId === nr.itemId && r.periodo === nr.periodo));
     state.real.push(nr);
   });
-
   document.getElementById('real-file').value = '';
-
   save();
   renderRealTable();
   alert(`Avance real cargado: ${nuevasReal.length} registros importados.`);
@@ -578,14 +593,14 @@ function descargarPlantillaReal() {
     return s;
   }
 
-  const colCantidad = 2;
-  const colPrimerMes = 3;
+  const colCantidad = 3;
+  const colPrimerMes = 4;
   const colTotal = colPrimerMes + totalMeses;
   const colPct = colTotal + 1;
   const letraCantidad = colLetra(colCantidad);
   const letraTotal = colLetra(colTotal);
 
-  const header = ['Ítem', 'Unidad', 'Cantidad', ...columnasMeses, 'Total real', '% ejecutado'];
+  const header = ['Nº', 'Ítem', 'Unidad', 'Cantidad', ...columnasMeses, 'Total real', '% ejecutado'];
 
   const filas = state.items.map((item, idx) => {
     const filaExcel = idx + 2;
@@ -595,6 +610,7 @@ function descargarPlantillaReal() {
     const celdaTotal = `${letraTotal}${filaExcel}`;
 
     return [
+      item.nro,
       item.nombre,
       item.unidad,
       item.cantidad,
@@ -613,6 +629,7 @@ function descargarPlantillaReal() {
   }
 
   ws['!cols'] = [
+    { wch: 8 },
     { wch: 35 },
     { wch: 10 },
     { wch: 12 },
@@ -826,7 +843,6 @@ function renderRealTable() {
 
     return `<tr>
       <td><span style="color:var(--text2);font-size:11px;margin-right:6px">${item.nro || ''}</span>${item.nombre}</td>
-      <td>${item.nombre}</td>
       <td>${item.unidad}</td>
       <td>${cv}</td>
       ${celdas}
